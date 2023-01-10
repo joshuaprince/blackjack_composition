@@ -21,14 +21,6 @@ pub struct BasicStrategyChart {
     chart: HashMap<ChartKey, (Action, Option<Action>)>,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
-pub enum Action {
-    Stand,
-    Hit,
-    Double,
-    Split,
-}
-
 #[derive(PartialEq, Eq, Clone, Copy, Hash)]
 enum HandType {
     Hard,
@@ -124,10 +116,12 @@ impl BasicStrategyChart {
 
 impl Display for BasicStrategyChart {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Hard 2  3  4  5  6  7  8  9  10 A")?;
+        let header = "2  3  4  5  6  7  8  9  10 A";
+        let header_ranks = vec![2, 3, 4, 5, 6, 7, 8, 9, 0, 1];
+        writeln!(f, "Hard {}", header)?;
         for hard_total in 5..=21 {
             write!(f, "{:<4}", hard_total)?;
-            for upcard in vec![2, 3, 4, 5, 6, 7, 8, 9, 0, 1] {
+            for &upcard in &header_ranks {
                 let key = ChartKey {
                     hand_type: HandType::Hard,
                     hand_number: hard_total,
@@ -139,10 +133,10 @@ impl Display for BasicStrategyChart {
             writeln!(f)?;
         }
 
-        writeln!(f, "Soft 2  3  4  5  6  7  8  9  10 A")?;
+        writeln!(f, "Soft {}", header)?;
         for soft_total in 13..=21 {
             write!(f, "{:<4}", soft_total)?;
-            for upcard in vec![2, 3, 4, 5, 6, 7, 8, 9, 0, 1] {
+            for &upcard in &header_ranks {
                 let key = ChartKey {
                     hand_type: HandType::Soft,
                     hand_number: soft_total,
@@ -154,10 +148,10 @@ impl Display for BasicStrategyChart {
             writeln!(f)?;
         }
 
-        writeln!(f, "Pair 2  3  4  5  6  7  8  9  10 A")?;
+        writeln!(f, "Pair {}", header)?;
         for paired_card in vec![2, 3, 4, 5, 6, 7, 8, 9, 0, 1] {
             write!(f, "{:<4}", int_to_rank_str(paired_card))?;
-            for upcard in vec![2, 3, 4, 5, 6, 7, 8, 9, 0, 1] {
+            for &upcard in &header_ranks {
                 let key = ChartKey {
                     hand_type: HandType::Pair,
                     hand_number: paired_card,
@@ -262,24 +256,24 @@ mod tests {
         println!("{}", chart);
 
         // Hard Hands
-        assert!(chart.play(&vec![8, 5], 4, 1) == Action::Stand);
-        assert!(chart.play(&vec![8, 5], 8, 1) == Action::Hit);
-        assert!(chart.play(&vec![5, 3, 2], 8, 1) == Action::Hit);
+        assert_eq!(chart.play(&vec![8, 5], 4, 1), Action::Stand);
+        assert_eq!(chart.play(&vec![8, 5], 8, 1), Action::Hit);
+        assert_eq!(chart.play(&vec![5, 3, 2], 8, 1), Action::Hit);
 
         // Soft/Ace Hands
-        assert!(chart.play(&vec![1, 7], 2, 1) == Action::Stand);
-        assert!(chart.play(&vec![1, 7], 3, 1) == Action::Double);
-        assert!(chart.play(&vec![1, 3, 4], 3, 1) == Action::Stand);
-        assert!(chart.play(&vec![1, 7], 7, 1) == Action::Stand);
-        assert!(chart.play(&vec![1, 7], 1, 1) == Action::Hit);
-        assert!(chart.play(&vec![1, 0], 1, 1) == Action::Stand);
+        assert_eq!(chart.play(&vec![1, 7], 2, 1), Action::Stand);
+        assert_eq!(chart.play(&vec![1, 7], 3, 1), Action::Double);
+        assert_eq!(chart.play(&vec![1, 3, 4], 3, 1), Action::Stand);
+        assert_eq!(chart.play(&vec![1, 7], 7, 1), Action::Stand);
+        assert_eq!(chart.play(&vec![1, 7], 1, 1), Action::Hit);
+        assert_eq!(chart.play(&vec![1, 0], 1, 1), Action::Stand);
 
         // Pair Hands
-        assert!(chart.play(&vec![1, 1], 1, 1) == Action::Split);
-        assert!(chart.play(&vec![0, 0], 6, 1) == Action::Stand);
-        assert!(chart.play(&vec![2, 2], 2, 3) == Action::Split);
-        assert!(chart.play(&vec![2, 2], 2, 4) == Action::Hit);
-        assert!(chart.play(&vec![2, 2], 0, 1) == Action::Hit);
-        assert!(chart.play(&vec![5, 5], 8, 1) == Action::Double);
+        assert_eq!(chart.play(&vec![1, 1], 1, 1), Action::Split);
+        assert_eq!(chart.play(&vec![0, 0], 6, 1), Action::Stand);
+        assert_eq!(chart.play(&vec![2, 2], 2, 3), Action::Split);
+        assert_eq!(chart.play(&vec![2, 2], 2, 4), Action::Hit);
+        assert_eq!(chart.play(&vec![2, 2], 0, 1), Action::Hit);
+        assert_eq!(chart.play(&vec![5, 5], 8, 1), Action::Double);
     }
 }
