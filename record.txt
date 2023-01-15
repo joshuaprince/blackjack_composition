@@ -1,0 +1,1 @@
+Played 3737998 hands and had total of +3232.5 returned. Edge = 0.08647677179067512%, 91 hands/sec 372463/5708068 deviant actions 0.5661716157535132% average +EV/hand

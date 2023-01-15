@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
-use crate::bj_helper::hand_total;
+use crate::bj_helper::{CardHand, Hand, PlayerHand};
 use crate::rules::*;
 use crate::types::*;
 
-static BS_TABLE_CSV: &'static [u8] = include_bytes!("./bs_6d_h17.csv");
+static BS_TABLE_CSV: &'static [u8] = include_bytes!("./bs_1d_h17_ndas_d10.csv");
 
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash)]
@@ -72,18 +72,21 @@ impl BasicStrategyChart {
     }
 
     /// Determine the play as dictated by this Basic Strategy chart.
-    pub fn play(&self, hand: &Vec<Rank>, dealer_up: Rank, num_hands: i32) -> Action {
-        let can_double = hand.len() == 2;
-        let is_splittable_pair =
-            hand.len() == 2 && hand[0] == hand[1] && num_hands < SPLIT_HANDS_LIMIT;
-
-        let (total, is_soft) = hand_total(hand);
+    pub fn play(&self, hand: CardHand, dealer_up: Rank, num_hands: i32) -> Action {
+        let can_double = hand.is_two()
+            && (DOUBLE_AFTER_SPLIT || num_hands == 1)
+            && (DOUBLE_ANY_HANDS || hand.total() >= DOUBLE_HARD_HANDS_THRU_11 && hand.total() <= 11);
+        let is_splittable_pair = num_hands < match hand.is_pair() {
+            Some(ACE) => SPLIT_ACES_LIMIT,
+            Some(_) => SPLIT_HANDS_LIMIT,
+            None => 1,
+        };
 
         let key = ChartKey {
             hand_type: {
                 if is_splittable_pair {
                     HandType::Pair
-                } else if is_soft {
+                } else if hand.is_soft() {
                     HandType::Soft
                 } else {
                     HandType::Hard
@@ -93,13 +96,18 @@ impl BasicStrategyChart {
                 if is_splittable_pair {
                     hand[0]
                 } else {
-                    total
+                    hand.total()
                 }
             },
             upcard: dealer_up,
         };
 
-        let (action, backup) = self.chart.get(&key).unwrap();
+        let (action, backup) = match self.chart.get(&key) {
+            Some(v) => v,
+            None => {
+                panic!("No action found for the hand: {:?} vs {} ({} hands)", hand, dealer_up, num_hands);
+            }
+        };
 
         match action {
             Action::Double => {
@@ -248,6 +256,9 @@ fn to_letters(actions: (Action, Option<Action>)) -> &'static str {
 #[cfg(test)]
 mod tests {
     use crate::basic_strategy::{Action, BasicStrategyChart};
+    use crate::hand;
+    use crate::bj_helper::{CardHand, Hand, PlayerHand};
+    use crate::types::TEN;
 
     #[test]
     fn test_basic_strat_plays() {
@@ -256,24 +267,25 @@ mod tests {
         println!("{}", chart);
 
         // Hard Hands
-        assert_eq!(chart.play(&vec![8, 5], 4, 1), Action::Stand);
-        assert_eq!(chart.play(&vec![8, 5], 8, 1), Action::Hit);
-        assert_eq!(chart.play(&vec![5, 3, 2], 8, 1), Action::Hit);
+        assert_eq!(chart.play(hand![8, 5], 4, 1), Action::Stand);
+        assert_eq!(chart.play(hand![8, 5], 8, 1), Action::Hit);
+        assert_eq!(chart.play(hand![5, 3, 2], 8, 1), Action::Hit);
+        assert_eq!(chart.play(hand![4, 4, 3, TEN], 10, 1), Action::Stand);
 
         // Soft/Ace Hands
-        assert_eq!(chart.play(&vec![1, 7], 2, 1), Action::Stand);
-        assert_eq!(chart.play(&vec![1, 7], 3, 1), Action::Double);
-        assert_eq!(chart.play(&vec![1, 3, 4], 3, 1), Action::Stand);
-        assert_eq!(chart.play(&vec![1, 7], 7, 1), Action::Stand);
-        assert_eq!(chart.play(&vec![1, 7], 1, 1), Action::Hit);
-        assert_eq!(chart.play(&vec![1, 0], 1, 1), Action::Stand);
+        assert_eq!(chart.play(hand![1, 7], 2, 1), Action::Stand);
+        assert_eq!(chart.play(hand![1, 7], 3, 1), Action::Double);
+        assert_eq!(chart.play(hand![1, 3, 4], 3, 1), Action::Stand);
+        assert_eq!(chart.play(hand![1, 7], 7, 1), Action::Stand);
+        assert_eq!(chart.play(hand![1, 7], 1, 1), Action::Hit);
+        assert_eq!(chart.play(hand![1, 0], 1, 1), Action::Stand);
 
         // Pair Hands
-        assert_eq!(chart.play(&vec![1, 1], 1, 1), Action::Split);
-        assert_eq!(chart.play(&vec![0, 0], 6, 1), Action::Stand);
-        assert_eq!(chart.play(&vec![2, 2], 2, 3), Action::Split);
-        assert_eq!(chart.play(&vec![2, 2], 2, 4), Action::Hit);
-        assert_eq!(chart.play(&vec![2, 2], 0, 1), Action::Hit);
-        assert_eq!(chart.play(&vec![5, 5], 8, 1), Action::Double);
+        assert_eq!(chart.play(hand![1, 1], 1, 1), Action::Split);
+        assert_eq!(chart.play(hand![0, 0], 6, 1), Action::Stand);
+        assert_eq!(chart.play(hand![2, 2], 2, 3), Action::Split);
+        assert_eq!(chart.play(hand![2, 2], 2, 4), Action::Hit);
+        assert_eq!(chart.play(hand![2, 2], 0, 1), Action::Hit);
+        assert_eq!(chart.play(hand![5, 5], 8, 1), Action::Double);
     }
 }
