@@ -115,6 +115,7 @@ fn play_hand(
     let mut bet_units: Vec<f64> = vec![1.0];
 
     let mut result = SimulationStatus::default();
+    result.hands_played += 1;
 
     // Check for dealt Blackjacks
     match (dealer_hand.total(), &player_hands[0].total()) {
@@ -232,7 +233,6 @@ fn play_hand(
         print_game_results(&dealer_hand, &player_hands, result.roi, Some(deck))
     }
 
-    result.hands_played += 1;
     result
 }
 
