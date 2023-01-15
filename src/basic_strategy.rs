@@ -72,7 +72,7 @@ impl BasicStrategyChart {
     }
 
     /// Determine the play as dictated by this Basic Strategy chart.
-    pub fn play(&self, hand: &Vec<Rank>, dealer_up: Rank, num_hands: usize) -> Action {
+    pub fn play(&self, hand: &Vec<Rank>, dealer_up: Rank, num_hands: i32) -> Action {
         let can_double = hand.len() == 2;
         let is_splittable_pair =
             hand.len() == 2 && hand[0] == hand[1] && num_hands < SPLIT_HANDS_LIMIT;

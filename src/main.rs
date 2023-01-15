@@ -5,7 +5,8 @@ mod rules;
 mod types;
 
 use std::cmp::Ordering;
-use std::thread;
+use std::sync::{Arc, Mutex};
+use std::{thread, time};
 use rand;
 use rand::distributions::{Distribution, WeightedIndex};
 use crate::basic_strategy::{BasicStrategyChart};
@@ -13,43 +14,53 @@ use crate::bj_helper::*;
 use crate::rules::*;
 use crate::types::*;
 
-const THREADS: i32 = 16;
-const HANDS_PER_THREAD: u64 = 1_000_000;
+const THREADS: i32 = 24;
+const HANDS_PER_REPORT: u64 = 1;  // hands to play on each thread before reporting results to mutex
 const DECK: Deck = [16*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS];
 const VERBOSE: bool = false;
 
-fn main() {
-    let bs_chart = BasicStrategyChart::new().unwrap();
-    let mut hands_run_grand_total = 0u64;
-    let mut return_grand_total = 0f64;
-    loop {
-        let total_hands = THREADS as u64 * HANDS_PER_THREAD;
+struct SimulationStatus {
+    hands_played: u64,
+    roi: f64,
+}
 
-        let mut thread_handles = vec![];
-
-        for _ in 0..THREADS {
-            let strategy_chart_this_thread = bs_chart.clone();
-            thread_handles.push(thread::spawn(move || {
-                play_hands(HANDS_PER_THREAD, &strategy_chart_this_thread)
-            }));
+impl Default for SimulationStatus {
+    fn default() -> Self {
+        Self {
+            hands_played: 0,
+            roi: 0f64,
         }
-
-        let mut total = 0f32;
-        for handle in thread_handles {
-            total += handle.join().unwrap();
-        }
-
-        println!("Played {} hands and had total of {:+} returned. Edge = {}%",
-                 total_hands, total, total / total_hands as f32 * 100f32);
-        hands_run_grand_total += total_hands;
-        return_grand_total += total as f64;
-        println!("Running total: {:e} hands, Edge = {}%",
-                 hands_run_grand_total, return_grand_total / hands_run_grand_total as f64 * 100f64);
     }
 }
 
-fn play_hands(num_hands: u64, strategy_chart: &BasicStrategyChart) -> f32 {
-    let mut total = 0f32;
+fn main() {
+    let bs_chart = BasicStrategyChart::new().unwrap();
+
+    let status = Arc::new(Mutex::new(SimulationStatus::default()));
+    let mut thread_handles = vec![];
+
+    for _ in 0..THREADS {
+        let strategy_chart_this_thread = bs_chart.clone();
+        let status_clone = status.clone();
+        thread_handles.push(thread::spawn(move || {
+            loop {
+                play_hands_and_report(&strategy_chart_this_thread, &status_clone)
+            }
+        }));
+    }
+
+    let start_time = time::Instant::now();
+    loop {
+        thread::sleep(time::Duration::from_secs(1));
+        let s = status.lock().unwrap();
+        println!("Played {} hands and had total of {:+} returned. Edge = {}%, {:e} hands/sec",
+                 s.hands_played, s.roi, s.roi / s.hands_played as f64 * 100f64,
+                 (s.hands_played as f64 / start_time.elapsed().as_secs_f64()).round());
+    }
+}
+
+fn play_hands(num_hands: u64, strategy_chart: &BasicStrategyChart) -> f64 {
+    let mut total = 0f64;
     let mut deck: Deck = [0; 10];
     for _ in 0..num_hands {
         let cards_left: u32 = deck.iter().sum();
@@ -59,6 +70,21 @@ fn play_hands(num_hands: u64, strategy_chart: &BasicStrategyChart) -> f32 {
         total += play_hand(&mut deck, strategy_chart, VERBOSE);
     }
     total
+}
+
+fn play_hands_and_report(strategy_chart: &BasicStrategyChart, status: &Arc<Mutex<SimulationStatus>>) {
+    let mut total = 0f64;
+    let mut deck: Deck = [0; 10];
+    for _ in 0..HANDS_PER_REPORT {
+        let cards_left: u32 = deck.iter().sum();
+        if cards_left <= SHUFFLE_AT_CARDS {
+            deck = DECK;
+        }
+        total += play_hand(&mut deck, strategy_chart, VERBOSE);
+    }
+    let mut s = status.lock().unwrap();
+    s.hands_played += HANDS_PER_REPORT;
+    s.roi += total;
 }
 
 //noinspection ALL
@@ -72,12 +98,12 @@ fn play_hand(
 ) -> HandResult {
     let mut dealer_hand: Vec<Rank> = vec![draw(deck), draw(deck)];
     let mut player_hands: Vec<Vec<Rank>> = vec![vec![draw(deck), draw(deck)]];
-    let mut bet_units: Vec<f32> = vec![1.0];
+    let mut bet_units: Vec<f64> = vec![1.0];
 
     // Check for dealt Blackjacks
     match (hand_total(&dealer_hand).0, hand_total(&player_hands[0]).0) {
-        (21, 21) => { return 0f32; },
-        (21, _) => { return -1f32; },
+        (21, 21) => { return 0f64; },
+        (21, _) => { return -1f64; },
         (_, 21) => { return BLACKJACK_MULTIPLIER; },
         (_, _) => (),
     }
@@ -86,7 +112,15 @@ fn play_hand(
     while hand_idx < player_hands.len() {  // Can't use ranged for loop because len of hands changes
         let mut can_act_again_this_hand = true;
         while can_act_again_this_hand {
-            match strategy_chart.play(&player_hands[hand_idx], dealer_hand[0], player_hands.len()) {
+            let bs_choice = strategy_chart.play(&player_hands[hand_idx], dealer_hand[0], player_hands.len() as i32);
+            let cs_choice = complex_strategy::play_shortcuts(&player_hands[hand_idx], player_hands.len() as i32, dealer_hand[0], deck);
+
+            if bs_choice != cs_choice {
+                println!("Deviated from basic strategy! BS={:?}, CS={:?}", bs_choice, cs_choice);
+                print_game_results(&dealer_hand, &player_hands, 0f64, Some(deck));
+            }
+
+            match cs_choice {
                 Action::Stand => { can_act_again_this_hand = false; }
                 Action::Hit => { player_hands[hand_idx].push(draw(deck)); }
                 Action::Double => {
@@ -139,7 +173,7 @@ fn play_hand(
         t if t > 21 => 1,  // Dealer bust score of 1, still beats a player bust (0)
         t => t,
     };
-    let mut win_loss = 0f32;
+    let mut win_loss = 0f64;
     for (hand_idx, hand) in player_hands.iter().enumerate() {
         let hand_score = match hand_total(hand).0 {
             t if t > 21 => 0,
@@ -153,13 +187,13 @@ fn play_hand(
     }
 
     if verbose {
-        print_game_results(dealer_hand, player_hands, win_loss, Some(deck))
+        print_game_results(&dealer_hand, &player_hands, win_loss, Some(deck))
     }
 
     win_loss
 }
 
-fn print_game_results(dealer_hand: Vec<Rank>, player_hands: Vec<Vec<Rank>>, win_loss: f32, deck: Option<&Deck>) {
+fn print_game_results(dealer_hand: &Vec<Rank>, player_hands: &Vec<Vec<Rank>>, win_loss: f64, deck: Option<&Deck>) {
     println!("Dealer  {:>2} {:?}", hand_total(&dealer_hand).0, dealer_hand);
     for hand in player_hands {
         println!(" Player {:>2} {:?}", hand_total(&hand).0, hand);
