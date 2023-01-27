@@ -6,7 +6,7 @@ use derive_more::{Add, AddAssign};
 use crate::basic_strategy::BasicStrategyChart;
 use crate::rules::*;
 use crate::simulation::{play_hand, PlayerDecision, SimulationResult};
-use crate::strategy_comparison::BasicComplexComparison;
+use crate::strategy_comparison::{BasicComplexComparison, COMP_CHART};
 
 mod basic_strategy;
 mod bj_helper;
@@ -46,6 +46,7 @@ fn main() {
     println!("Simulating rules: {}", RULES);
 
     let start_time = time::Instant::now();
+    let mut times_printed: u64 = 0;
     loop {
         thread::sleep(time::Duration::from_secs(1));
         let s = status.lock().unwrap();
@@ -55,6 +56,12 @@ fn main() {
                  s.comparison.deviations, s.sim.decisions_made,
                  s.comparison.gained_ev / s.sim.hands_played as f64 * 100f64,
         );
+
+        times_printed += 1;
+
+        if times_printed % 10 == 0 {
+            println!("{}", COMP_CHART.lock().unwrap())
+        }
     }
 }
 

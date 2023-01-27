@@ -24,13 +24,6 @@ pub struct BasicStrategyChart {
     chart: HashMap<ChartKey, (Action, Option<Action>)>,
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Hash)]
-enum HandType {
-    Hard,
-    Soft,
-    Pair,
-}
-
 impl BasicStrategyChart {
     pub fn new(rules: &BlackjackRules) -> Result<BasicStrategyChart, Box<dyn Error>> {
         let bs_table = match rules {
