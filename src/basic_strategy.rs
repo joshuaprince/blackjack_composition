@@ -6,7 +6,8 @@ use crate::bj_helper::{CardHand, Hand, PlayerHand};
 use crate::rules::*;
 use crate::types::*;
 
-static BS_TABLE_CSV: &'static [u8] = include_bytes!("./bs_1d_h17_ndas_d10.csv");
+static BS_TABLE_CSV_1D: &'static [u8] = include_bytes!("charts/bs_1d_h17_ndas_d10.csv");
+static BS_TABLE_CSV_6D: &'static [u8] = include_bytes!("charts/bs_6d_h17.csv");
 
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash)]
@@ -29,10 +30,15 @@ enum HandType {
 }
 
 impl BasicStrategyChart {
-    pub fn new() -> Result<BasicStrategyChart, Box<dyn Error>> {
+    pub fn new(decks: u32) -> Result<BasicStrategyChart, Box<dyn Error>> {
+        let bs_table = match decks {
+            1 => BS_TABLE_CSV_1D,
+            6 => BS_TABLE_CSV_6D,
+            other => panic!("No basic strategy chart for {} decks!", other)
+        };
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(false)
-            .from_reader(BS_TABLE_CSV);
+            .from_reader(bs_table);
 
         let mut chart = HashMap::new();
 
@@ -72,12 +78,12 @@ impl BasicStrategyChart {
     }
 
     /// Determine the play as dictated by this Basic Strategy chart.
-    pub fn play(&self, hand: CardHand, dealer_up: Rank, num_hands: i32) -> Action {
+    pub fn basic_play(&self, hand: &CardHand, dealer_up: Rank, num_hands: i32) -> Action {
         let can_double = hand.is_two()
             && (DOUBLE_AFTER_SPLIT || num_hands == 1)
             && (DOUBLE_ANY_HANDS || hand.total() >= DOUBLE_HARD_HANDS_THRU_11 && hand.total() <= 11);
         let is_splittable_pair = num_hands < match hand.is_pair() {
-            Some(ACE) => SPLIT_ACES_LIMIT,
+            Some(A) => SPLIT_ACES_LIMIT,
             Some(_) => SPLIT_HANDS_LIMIT,
             None => 1,
         };
@@ -258,34 +264,34 @@ mod tests {
     use crate::basic_strategy::{Action, BasicStrategyChart};
     use crate::hand;
     use crate::bj_helper::{CardHand, Hand, PlayerHand};
-    use crate::types::TEN;
+    use crate::types::{A, T};
 
     #[test]
     fn test_basic_strat_plays() {
-        let chart = BasicStrategyChart::new().expect("Couldn't generate strategy chart");
+        let chart = BasicStrategyChart::new(6).expect("Couldn't generate strategy chart");
 
         println!("{}", chart);
 
         // Hard Hands
-        assert_eq!(chart.play(hand![8, 5], 4, 1), Action::Stand);
-        assert_eq!(chart.play(hand![8, 5], 8, 1), Action::Hit);
-        assert_eq!(chart.play(hand![5, 3, 2], 8, 1), Action::Hit);
-        assert_eq!(chart.play(hand![4, 4, 3, TEN], 10, 1), Action::Stand);
+        assert_eq!(chart.basic_play(&hand![8, 5], 4, 1), Action::Stand);
+        assert_eq!(chart.basic_play(&hand![8, 5], 8, 1), Action::Hit);
+        assert_eq!(chart.basic_play(&hand![5, 3, 2], 8, 1), Action::Hit);
+        assert_eq!(chart.basic_play(&hand![4, 4, 3, T], T, 1), Action::Stand);
 
         // Soft/Ace Hands
-        assert_eq!(chart.play(hand![1, 7], 2, 1), Action::Stand);
-        assert_eq!(chart.play(hand![1, 7], 3, 1), Action::Double);
-        assert_eq!(chart.play(hand![1, 3, 4], 3, 1), Action::Stand);
-        assert_eq!(chart.play(hand![1, 7], 7, 1), Action::Stand);
-        assert_eq!(chart.play(hand![1, 7], 1, 1), Action::Hit);
-        assert_eq!(chart.play(hand![1, 0], 1, 1), Action::Stand);
+        assert_eq!(chart.basic_play(&hand![A, 7], 2, 1), Action::Stand);
+        assert_eq!(chart.basic_play(&hand![A, 7], 3, 1), Action::Double);
+        assert_eq!(chart.basic_play(&hand![A, 3, 4], 3, 1), Action::Stand);
+        assert_eq!(chart.basic_play(&hand![A, 7], 7, 1), Action::Stand);
+        assert_eq!(chart.basic_play(&hand![A, 7], A, 1), Action::Hit);
+        assert_eq!(chart.basic_play(&hand![A, T], A, 1), Action::Stand);
 
         // Pair Hands
-        assert_eq!(chart.play(hand![1, 1], 1, 1), Action::Split);
-        assert_eq!(chart.play(hand![0, 0], 6, 1), Action::Stand);
-        assert_eq!(chart.play(hand![2, 2], 2, 3), Action::Split);
-        assert_eq!(chart.play(hand![2, 2], 2, 4), Action::Hit);
-        assert_eq!(chart.play(hand![2, 2], 0, 1), Action::Hit);
-        assert_eq!(chart.play(hand![5, 5], 8, 1), Action::Double);
+        assert_eq!(chart.basic_play(&hand![A, A], A, 1), Action::Split);
+        assert_eq!(chart.basic_play(&hand![T, T], 6, 1), Action::Stand);
+        assert_eq!(chart.basic_play(&hand![2, 2], 2, 3), Action::Split);
+        assert_eq!(chart.basic_play(&hand![2, 2], 2, 4), Action::Hit);
+        assert_eq!(chart.basic_play(&hand![2, 2], 0, 1), Action::Hit);
+        assert_eq!(chart.basic_play(&hand![5, 5], 8, 1), Action::Double);
     }
 }

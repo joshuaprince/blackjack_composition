@@ -2,7 +2,6 @@ use std::cmp::Ordering;
 use enum_map::EnumMap;
 use memoize::memoize;
 use crate::bj_helper::{CardHand, Hand, PartialDealerHand, PartialHand, PlayerHand};
-use crate::hand;
 use crate::rules::{*};
 use crate::types::{*};
 
@@ -122,7 +121,7 @@ fn ev_split(player_hand: PartialHand, num_hands: i32, upcard: Rank, deck: &Deck)
     // This function returns the total EV of both split hands.
 
     let split_card = player_hand.is_pair().unwrap();
-    let can_act_after = HIT_SPLIT_ACES || (player_hand.is_pair() != Some(ACE));
+    let can_act_after = HIT_SPLIT_ACES || (player_hand.is_pair() != Some(A));
 
     // Recursive case - what can happen with the new second card?
     let num_deck_cards: u32 = deck.iter().sum();
@@ -248,7 +247,7 @@ fn can_double(player_hand: &PartialHand, num_hands: i32) -> bool {
 
 fn can_split(player_hand: &PartialHand, num_hands: i32) -> bool {
     let max_hands_allowed = match player_hand.is_pair() {
-        Some(ACE) => SPLIT_ACES_LIMIT,
+        Some(A) => SPLIT_ACES_LIMIT,
         Some(_) => SPLIT_HANDS_LIMIT,
         None => 1,
     };
@@ -258,14 +257,13 @@ fn can_split(player_hand: &PartialHand, num_hands: i32) -> bool {
 #[cfg(test)]
 mod tests {
     use crate::complex_strategy::*;
-    use crate::{draw, print_game_results};
+    use crate::{hand, shoe};
+    use crate::simulation::{play_hand, PlayerDecision};
     use crate::types::{Deck, Rank};
-
-    const DECKS: u32 = 1;
 
     #[test]
     fn test_dealer_prob_beating() {
-        let mut deck: Deck = [16*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS];
+        let mut deck: Deck = shoe!(DECKS);
         let upcard: Rank = 1;
         deck[upcard as usize] -= 1;
 
@@ -275,7 +273,7 @@ mod tests {
 
     #[test]
     fn test_all_dealer_prob() {
-        let mut deck: Deck = [16*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS];
+        let mut deck: Deck = shoe!(DECKS);
         let upcard: Rank = 1;
         deck[upcard as usize] -= 1;
 
@@ -284,9 +282,9 @@ mod tests {
 
     #[test]
     fn test_ev() {
-        let deck: Deck = [16*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS, 4*DECKS];
-        let upcard: Rank = 8;
-        let player = hand![ACE, 6, ACE];
+        let deck: Deck = shoe!(DECKS);
+        let upcard: Rank = 2;
+        let player = hand![2, 3];
         // let dealer_p = all_dealer_probabilities(upcard, &deck);
 
         // let evx = ev_double(&player, upcard, 1f64, &deck2);
@@ -306,90 +304,16 @@ mod tests {
         // Dealer down card cannot be an ace
         let deck: Deck = [11, 3, 0, 1, 1, 0, 2, 2, 2, 3];
         let upcard: Rank = 5;
-        let mut player_hands = vec![hand![TEN, TEN]];
-        let sims = 10000000;
-        let mut roi = 0;
+        let mut player_hands = vec![hand![T, T]];
+        let sims = 10;
+        let mut roi = 0f64;
 
         let calc_result = ev(PartialHand::from(player_hands[0].clone()), 1, upcard, deck.clone());
         println!("I calculate EV: {:+}%", calc_result.ev * 100.0);
 
         for _ in 0..sims {
             let mut deck = deck.clone();
-            let mut hand_idx = 0;
-            while hand_idx < player_hands.len() {
-                let mut can_act_again_this_hand = true;
-                while can_act_again_this_hand {
-                    let cs_calc = play(&player_hands[hand_idx], player_hands.len() as i32, upcard, &deck);
-                    let cs_choice = cs_calc.action;
-
-                    match cs_choice {
-                        Action::Stand => { can_act_again_this_hand = false; }
-                        Action::Hit => { player_hands[hand_idx] += draw(&mut deck); }
-                        Action::Double => { panic!("No double should be needed in this sim") }
-                        Action::Split => {
-                            // Create new hand at the end of the current list
-                            let split_rank = player_hands[hand_idx][1];
-                            player_hands.push(hand![split_rank, draw(&mut deck)]);
-
-                            // Draw and replace the second card in this current hand
-                            player_hands[hand_idx].cards[1] = draw(&mut deck);
-                        }
-                    }
-
-                    if player_hands[hand_idx].total() > 21 {
-                        can_act_again_this_hand = false;
-                    }
-                }
-                hand_idx += 1;
-            }
-
-            // Dealer action
-            if !player_hands.iter().any(|h| h.total() <= 21) {
-                continue;
-            }
-            let mut dealer_hand = {
-                let mut aceless = deck.clone();
-                aceless[ACE as usize] = 0;
-                let down_card = draw(&mut aceless);
-                // Also have to remove the card from the original deck
-                deck[down_card as usize] -= 1;
-                hand![upcard, down_card]
-            };
-            loop {
-                if dealer_hand.total() >= 18 {
-                    break;
-                }
-                if dealer_hand.total() >= 17 {
-                    if !HIT_SOFT_17 {
-                        break;
-                    }
-                    if !dealer_hand.is_soft() {
-                        break;
-                    }
-                }
-                dealer_hand += draw(&mut deck);
-            }
-
-            // Figure out winnings
-            let mut this_sim_roi = 0;
-            let dealer_score = match dealer_hand.total() {
-                t if t > 21 => 1,  // Dealer bust score of 1, still beats a player bust (0)
-                t => t,
-            };
-            for (hand_idx, hand) in player_hands.iter().enumerate() {
-                let hand_score = match hand.total() {
-                    t if t > 21 => 0,
-                    t => t,
-                };
-                match hand_score.cmp(&dealer_score) {
-                    Ordering::Greater => { this_sim_roi += 1; }
-                    Ordering::Equal => {}
-                    Ordering::Less => { this_sim_roi -= 1; }
-                }
-            }
-
-            //print_game_results(&dealer_hand, &player_hands, this_sim_roi as f64, Some(&deck));
-            roi += this_sim_roi;
+            roi += play_hand(&mut deck, PlayerDecision::ComplexStrategy).0.roi
         }
 
         println!("Total ROI: {} EV: {:+}%", roi, roi as f64 / sims as f64 * 100.0);

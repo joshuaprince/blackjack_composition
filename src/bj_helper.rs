@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 use std::ops;
 use std::ops::Index;
 use crate::rules::{DOUBLE_ANY_HANDS, DOUBLE_HARD_HANDS_THRU_11};
-use crate::types::{ACE, Rank, TEN};
+use crate::types::{A, Rank, T};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 pub struct PartialHand{
@@ -86,7 +86,7 @@ impl CardHand {
         let mut total = 0;
         for card in &self.cards {
             total += card_value(*card);
-            if *card == ACE {
+            if *card == A {
                 contains_ace = true;
             }
         }
@@ -176,7 +176,7 @@ impl ops::Add<Rank> for PartialHand {
             new_hand.is_soft = false;
         }
 
-        if rhs == ACE && new_hand.total <= 11 {
+        if rhs == A && new_hand.total <= 11 {
             new_hand.total += 10;
             new_hand.is_soft = true;
         }
@@ -191,7 +191,7 @@ impl ops::Add<Rank> for PartialHand {
 impl PartialHand {
     pub fn from_two(a: Rank, b: Rank) -> Self {
         let mut new_hand = PartialHand::from(hand![a, b]);
-        new_hand.is_soft = a == ACE || b == ACE;
+        new_hand.is_soft = a == A || b == A;
         new_hand.is_two = true;
         new_hand.is_pair = if a == b {
             Some(a)
@@ -212,7 +212,7 @@ impl PartialDealerHand {
         Self {
             total: card_value(rank),
             is_one: true,
-            is_soft: rank == ACE,
+            is_soft: rank == A,
         }
     }
 }
@@ -229,7 +229,7 @@ impl ops::Add<Rank> for PartialDealerHand {
             new_hand.is_soft = false;
         }
 
-        if rhs == ACE && new_hand.total <= 11 {
+        if rhs == A && new_hand.total <= 11 {
             new_hand.total += 10;
             new_hand.is_soft = true;
         }
@@ -242,8 +242,8 @@ impl ops::Add<Rank> for PartialDealerHand {
 
 fn card_value(rank: Rank) -> i32 {
     match rank {
-        TEN => 10,
-        ACE => 1,
+        T => 10,
+        A => 1,
         other => other,
     }
 }
