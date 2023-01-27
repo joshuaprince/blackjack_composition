@@ -1,10 +1,11 @@
 use std::cmp::Ordering;
+
 use derive_more::{Add, AddAssign};
 use rand::distributions::{Distribution, WeightedIndex};
+
+use crate::{complex_strategy, hand, RULES, strategy_comparison};
 use crate::basic_strategy::BasicStrategyChart;
 use crate::bj_helper::*;
-use crate::{complex_strategy, hand, strategy_comparison};
-use crate::rules::*;
 use crate::strategy_comparison::BasicComplexComparison;
 use crate::types::*;
 
@@ -47,7 +48,7 @@ pub fn play_hand(
     match (dealer_hand.total(), &player_hands[0].total()) {
         (21, 21) => { result.roi = 0f64; return (result, comparison); },
         (21, _) => { result.roi = -1f64; return (result, comparison); },
-        (_, 21) => { result.roi = BLACKJACK_MULTIPLIER; return (result, comparison); },
+        (_, 21) => { result.roi = RULES.blackjack_multiplier; return (result, comparison); },
         (_, _) => (),
     }
 
@@ -108,7 +109,7 @@ pub fn play_hand(
                 break;
             }
             if dealer_hand.total() >= 17 {
-                if !HIT_SOFT_17 {
+                if !RULES.hit_soft_17 {
                     break;
                 }
                 if !dealer_hand.is_soft() {
@@ -155,4 +156,15 @@ fn draw(deck: &mut Deck) -> Rank {
     let card = random_card(*deck);
     deck[card as usize] -= 1;
     card
+}
+
+fn print_game_results(dealer_hand: &CardHand, player_hands: &Vec<CardHand>, win_loss: f64, deck: Option<&Deck>) {
+    println!("Dealer  {:>2} {:?}", dealer_hand.total(), dealer_hand);
+    for hand in player_hands {
+        println!(" Player {:>2} {:?}", hand.total(), hand);
+    }
+    println!(" Result {:+}", win_loss);
+    if let Some(d) = deck {
+        println!(" Deck: {:?}", d);
+    }
 }

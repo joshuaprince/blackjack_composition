@@ -1,8 +1,10 @@
 use std::cmp::Ordering;
+
 use enum_map::EnumMap;
 use memoize::memoize;
+
 use crate::bj_helper::{CardHand, Hand, PartialDealerHand, PartialHand, PlayerHand};
-use crate::rules::{*};
+use crate::RULES;
 use crate::types::{*};
 
 pub fn play(hand: &CardHand, num_hands: i32, dealer_up: Rank, deck: &Deck) -> EvCalcResult {
@@ -121,7 +123,7 @@ fn ev_split(player_hand: PartialHand, num_hands: i32, upcard: Rank, deck: &Deck)
     // This function returns the total EV of both split hands.
 
     let split_card = player_hand.is_pair().unwrap();
-    let can_act_after = HIT_SPLIT_ACES || (player_hand.is_pair() != Some(A));
+    let can_act_after = RULES.hit_split_aces || (player_hand.is_pair() != Some(A));
 
     // Recursive case - what can happen with the new second card?
     let num_deck_cards: u32 = deck.iter().sum();
@@ -154,7 +156,7 @@ fn ev_split(player_hand: PartialHand, num_hands: i32, upcard: Rank, deck: &Deck)
 #[memoize(Capacity: 100_000)]
 fn dealer_probabilities_beating(player_hand_to_beat: i32, dealer_hand: PartialDealerHand, deck: Deck) -> (f64, f64) {
     // Base cases - the dealer is finished playing.
-    if dealer_hand.total() >= 18 || (dealer_hand.total() >= 17 && (!HIT_SOFT_17 || !dealer_hand.is_soft())) {
+    if dealer_hand.total() >= 18 || (dealer_hand.total() >= 17 && (!RULES.hit_soft_17 || !dealer_hand.is_soft())) {
         if player_hand_to_beat > 21 {
             return (1f64, 0f64);
         } else if dealer_hand.total() > 21 {
@@ -229,16 +231,16 @@ fn can_double(player_hand: &PartialHand, num_hands: i32) -> bool {
         return false;
     }
 
-    if !DOUBLE_AFTER_SPLIT && num_hands > 1 {
+    if !RULES.double_after_split && num_hands > 1 {
         return false;
     }
 
-    if DOUBLE_ANY_HANDS {
+    if RULES.double_any_hands {
         return true;
     }
 
     let total = player_hand.total();
-    if total >= DOUBLE_HARD_HANDS_THRU_11 && total <= 11 {
+    if total >= RULES.double_hard_hands_thru_11 && total <= 11 {
         return true;
     }
 
@@ -247,8 +249,8 @@ fn can_double(player_hand: &PartialHand, num_hands: i32) -> bool {
 
 fn can_split(player_hand: &PartialHand, num_hands: i32) -> bool {
     let max_hands_allowed = match player_hand.is_pair() {
-        Some(A) => SPLIT_ACES_LIMIT,
-        Some(_) => SPLIT_HANDS_LIMIT,
+        Some(A) => RULES.split_aces_limit,
+        Some(_) => RULES.split_hands_limit,
         None => 1,
     };
     num_hands < max_hands_allowed
@@ -256,10 +258,12 @@ fn can_split(player_hand: &PartialHand, num_hands: i32) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::complex_strategy::*;
     use crate::{hand, shoe};
+    use crate::complex_strategy::*;
     use crate::simulation::{play_hand, PlayerDecision};
     use crate::types::{Deck, Rank};
+
+    const DECKS: u32 = 1;
 
     #[test]
     fn test_dealer_prob_beating() {
@@ -304,7 +308,7 @@ mod tests {
         // Dealer down card cannot be an ace
         let deck: Deck = [11, 3, 0, 1, 1, 0, 2, 2, 2, 3];
         let upcard: Rank = 5;
-        let mut player_hands = vec![hand![T, T]];
+        let player_hands = vec![hand![T, T]];
         let sims = 10;
         let mut roi = 0f64;
 

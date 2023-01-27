@@ -1,7 +1,6 @@
-use std::borrow::Borrow;
 use std::ops;
 use std::ops::Index;
-use crate::rules::{DOUBLE_ANY_HANDS, DOUBLE_HARD_HANDS_THRU_11};
+
 use crate::types::{A, Rank, T};
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
