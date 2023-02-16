@@ -84,10 +84,11 @@ impl CardHand {
         let mut contains_ace = false;
         let mut total = 0;
         for card in &self.cards {
-            total += card_value(*card);
-            if *card == A {
-                contains_ace = true;
-            }
+            total += match *card {
+                T => 10,
+                A => { contains_ace = true; 1 },  // 11 accounted for below
+                n => n
+            };
         }
 
         if contains_ace && total <= 11 {
@@ -168,7 +169,11 @@ impl ops::Add<Rank> for PartialHand {
 
     fn add(self, rhs: Rank) -> Self::Output {
         let mut new_hand = self.clone();
-        new_hand.total += card_value(rhs);
+        new_hand.total += match rhs {
+            T => 10,
+            A => 1,  // 11 accounted for below
+            n => n
+        };
 
         if new_hand.total > 21 && self.is_soft {
             new_hand.total -= 10;
@@ -209,7 +214,11 @@ impl PartialDealerHand {
 
     pub fn single(rank: Rank) -> Self {
         Self {
-            total: card_value(rank),
+            total: match rank {
+                T => 10,
+                A => 11,
+                n => n
+            },
             is_one: true,
             is_soft: rank == A,
         }
@@ -221,7 +230,11 @@ impl ops::Add<Rank> for PartialDealerHand {
 
     fn add(self, rhs: Rank) -> Self::Output {
         let mut new_hand = self.clone();
-        new_hand.total += card_value(rhs);
+        new_hand.total += match rhs {
+            T => 10,
+            A => 1,  // 11 accounted for below
+            n => n
+        };
 
         if new_hand.total > 21 && self.is_soft {
             new_hand.total -= 10;
@@ -236,13 +249,5 @@ impl ops::Add<Rank> for PartialDealerHand {
         new_hand.is_one = false;
 
         new_hand
-    }
-}
-
-fn card_value(rank: Rank) -> i32 {
-    match rank {
-        T => 10,
-        A => 1,
-        other => other,
     }
 }

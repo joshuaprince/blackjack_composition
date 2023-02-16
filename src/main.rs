@@ -16,7 +16,7 @@ mod simulation;
 mod strategy_comparison;
 mod types;
 
-const THREADS: i32 = 24;
+const THREADS: i32 = 20;
 const SHOES_PER_REPORT: u64 = 5;  // shoes to play on each thread before reporting results to mutex
 
 pub static RULES: BlackjackRules = RULES_1D_H17_NDAS_D10;

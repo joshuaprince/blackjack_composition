@@ -54,9 +54,10 @@ pub fn play_hand(
 
     // Player action
     let mut hand_idx = 0;
-    while hand_idx < player_hands.len() {  // Can't use ranged for loop because len of hands changes
+    let mut can_act_again_at_all = true;
+    while hand_idx < player_hands.len() && can_act_again_at_all {
         let mut can_act_again_this_hand = true;
-        while can_act_again_this_hand {
+        while can_act_again_this_hand && can_act_again_at_all {
             let decision = match player_decision {
                 PlayerDecision::BasicStrategy(chart) => {
                     chart.basic_play(&player_hands[hand_idx], dealer_hand[0], player_hands.len() as i32)
@@ -92,6 +93,12 @@ pub fn play_hand(
 
                     // Draw and replace the second card in this current hand
                     player_hands[hand_idx].cards[1] = draw(deck);
+
+                    if !RULES.hit_split_aces && split_rank == A {
+                        assert_eq!(RULES.split_aces_limit, 2, "TODO: Can't support resplit aces.");
+                        player_hands[hand_idx + 1].cards[1] = draw(deck);
+                        can_act_again_at_all = false;
+                    }
                 }
             }
 

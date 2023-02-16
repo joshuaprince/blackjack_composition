@@ -66,22 +66,12 @@ fn ev_stand(player_hand: PartialHand, upcard: Rank, deck: &Deck) -> f64 {
         return -1f64;
     }
 
-    let dealer_p = all_dealer_probabilities(upcard, deck);
+    let (p_dealer_win, p_push) = dealer_probabilities_beating(
+        player_hand.total(), PartialDealerHand::single(upcard), *deck
+    );
+    let p_player_win: f64 = 1f64 - p_dealer_win - p_push;
 
-    let (p_loss, p_push): (f64, f64) = {
-        let mut p_player_wins = dealer_p[0]; // start with chance of dealer bust
-        for i in 17..player_hand.total() {
-            p_player_wins += dealer_p[(i - 16) as usize];
-        }
-        let p_player_push = if 17 <= player_hand.total() {
-            dealer_p[(player_hand.total() - 16) as usize]
-        } else { 0f64 };
-
-        (1f64 - p_player_wins - p_player_push, p_player_push)
-    };
-
-    let p_win: f64 = 1f64 - p_loss - p_push;
-    p_win - p_loss
+    p_player_win - p_dealer_win
 }
 
 fn ev_hit(player_hand: PartialHand, num_hands: i32, upcard: Rank, deck: &Deck, can_act_again: bool) -> f64 {
@@ -91,23 +81,20 @@ fn ev_hit(player_hand: PartialHand, num_hands: i32, upcard: Rank, deck: &Deck, c
     }
 
     // Recursive case - what can happen with the next card?
-    let num_deck_cards: u32 = deck.iter().sum();
+    let p_next_card_is = p_next_card_is_each(&deck, true, true);
     let mut cumul_ev = 0f64;
     for next_card in RANKS {
-        let next_card: Rank = next_card;
-        if deck[next_card as usize] == 0 {
+        if p_next_card_is[next_card as usize] <= 0f64 {
             continue;
         }
-
-        let prob_of_this_card = deck[next_card as usize] as f64 / num_deck_cards as f64;
 
         let mut deck_after_this_card = deck.clone();
         deck_after_this_card[next_card as usize] -= 1;
 
         if can_act_again {
-            cumul_ev += prob_of_this_card * ev(player_hand + next_card, num_hands, upcard, deck_after_this_card).ev;
+            cumul_ev += p_next_card_is[next_card as usize] * ev(player_hand + next_card, num_hands, upcard, deck_after_this_card).ev;
         } else {
-            cumul_ev += prob_of_this_card * ev_stand(player_hand + next_card, upcard, &deck_after_this_card);
+            cumul_ev += p_next_card_is[next_card as usize] * ev_stand(player_hand + next_card, upcard, &deck_after_this_card);
         }
     }
 
@@ -126,29 +113,59 @@ fn ev_split(player_hand: PartialHand, num_hands: i32, upcard: Rank, deck: &Deck)
     let can_act_after = RULES.hit_split_aces || (player_hand.is_pair() != Some(A));
 
     // Recursive case - what can happen with the new second card?
-    let num_deck_cards: u32 = deck.iter().sum();
+    let p_next_card_is = p_next_card_is_each(&deck, true, true);
     let mut cumul_ev = 0f64;
     for next_card in RANKS {
-        let next_card: Rank = next_card;
-        if deck[next_card as usize] == 0 {
+        if p_next_card_is[next_card as usize] <= 0f64 {
             continue;
         }
-
-        let prob_of_this_card = deck[next_card as usize] as f64 / num_deck_cards as f64;
 
         let mut deck_after_this_card = deck.clone();
         deck_after_this_card[next_card as usize] -= 1;
 
         if can_act_after {
             let ev_with = ev(PartialHand::from_two(split_card, next_card), num_hands + 1, upcard, deck_after_this_card).ev;
-            let weighted_ev = ev_with * prob_of_this_card;
-            cumul_ev += weighted_ev;
+            cumul_ev += ev_with * p_next_card_is[next_card as usize];;
         } else {
-            cumul_ev += prob_of_this_card * ev_stand(PartialHand::from_two(split_card, next_card), upcard, &deck_after_this_card);
+            let ev_standing = ev_stand(PartialHand::from_two(split_card, next_card), upcard, &deck_after_this_card);
+            cumul_ev += ev_standing * p_next_card_is[next_card as usize];
         }
     }
 
     cumul_ev * 2f64
+}
+
+/// Probabilities that the next card out of a deck is each rank.
+/// Example: For a deck of [2, 1, 0, .., 1]:
+///            If ten and ace are possible, returns [0.5, 0.25, 0, .., 0.25]
+///            If ten is not possible, returns [0, 0.5, 0, .., 0.5]
+fn p_next_card_is_each(deck: &Deck, can_be_ten: bool, can_be_ace: bool) -> [f64; N_RANKS] {
+    let mut p = [0f64; N_RANKS];
+
+    let mut total_next_card_possibilities: u32 = deck.iter().sum();
+    if !can_be_ten {
+        total_next_card_possibilities -= deck[T as usize];
+    }
+    if !can_be_ace {
+        total_next_card_possibilities -= deck[A as usize];
+    }
+
+    for next_card in RANKS {
+        if deck[next_card as usize] == 0
+            || (!can_be_ten && next_card == T)
+            || (!can_be_ace && next_card == A) {
+            continue;
+        }
+
+        p[next_card as usize] = deck[next_card as usize] as f64 / total_next_card_possibilities as f64;
+    }
+
+    // Validation - delete
+    let total_p: f64 = p.iter().sum();
+    assert!(total_p > 0.99999f64);
+    assert!(total_p < 1.00001f64);
+
+    p
 }
 
 /// Probability dealer beats this score / pushes with this score.
@@ -170,32 +187,16 @@ fn dealer_probabilities_beating(player_hand_to_beat: i32, dealer_hand: PartialDe
     }
 
     // Recursive cases - the dealer still has to pick one or more cards.
-    let num_deck_cards: u32 = deck.iter().sum();
-    let mut cumul_probs = (0f64, 0f64);
+    // Dealer already checked for Blackjack.
+    let next_can_be_ten = !(dealer_hand.is_one() && dealer_hand.total() == 11);
+    let next_can_be_ace = !(dealer_hand.is_one() && dealer_hand.total() == 10);
+    let p_next_card_is = p_next_card_is_each(&deck, next_can_be_ten, next_can_be_ace);
+    let mut cumul_prob_dealer_win = 0f64;
+    let mut cumul_prob_push = 0f64;
     for next_card in RANKS {
-        let next_card: Rank = next_card;
-        if deck[next_card as usize] == 0 {
+        if p_next_card_is[next_card as usize] <= 0f64 {
             continue;
         }
-
-        // Already checked for Blackjack, so the next_card cannot give the dealer a Natural.
-        let mut possible_next_cards = num_deck_cards;
-        if dealer_hand.is_one() {
-            if dealer_hand.total() == 10 {
-                possible_next_cards -= deck[1];
-                if next_card == 1 {
-                    continue;
-                }
-            }
-            if dealer_hand.total() == 11 {
-                possible_next_cards -= deck[0];
-                if next_card == 0 {
-                    continue;
-                }
-            }
-        }
-
-        let prob_of_this_card = deck[next_card as usize] as f64 / possible_next_cards as f64;
 
         let mut deck_after_this_card = deck.clone();
         deck_after_this_card[next_card as usize] -= 1;
@@ -203,27 +204,11 @@ fn dealer_probabilities_beating(player_hand_to_beat: i32, dealer_hand: PartialDe
         let (win_prob_with_this_card, push_prob_with_this_card) =
             dealer_probabilities_beating(player_hand_to_beat, dealer_hand + next_card, deck_after_this_card);
 
-        cumul_probs.0 += win_prob_with_this_card * prob_of_this_card;
-        cumul_probs.1 += push_prob_with_this_card * prob_of_this_card;
+        cumul_prob_dealer_win += win_prob_with_this_card * p_next_card_is[next_card as usize];
+        cumul_prob_push += push_prob_with_this_card * p_next_card_is[next_card as usize];
     }
 
-    cumul_probs
-}
-
-/// Calculates the probabilities that the dealer will end with each total.
-/// Returns probability values of each possible hand total - [Bust, 17, 18, 19, 20, 21]
-fn all_dealer_probabilities(upcard: Rank, deck: &Deck) -> [f64; 6] {
-    let p_dealer_no_bust = dealer_probabilities_beating(16, PartialDealerHand::single(upcard), deck.clone()).0;
-    let bust_prob = 1f64 - p_dealer_no_bust;
-
-    [
-        bust_prob,
-        dealer_probabilities_beating(17, PartialDealerHand::single(upcard), deck.clone()).1,
-        dealer_probabilities_beating(18, PartialDealerHand::single(upcard), deck.clone()).1,
-        dealer_probabilities_beating(19, PartialDealerHand::single(upcard), deck.clone()).1,
-        dealer_probabilities_beating(20, PartialDealerHand::single(upcard), deck.clone()).1,
-        dealer_probabilities_beating(21, PartialDealerHand::single(upcard), deck.clone()).1,
-    ]
+    (cumul_prob_dealer_win, cumul_prob_push)
 }
 
 fn can_double(player_hand: &PartialHand, num_hands: i32) -> bool {
@@ -268,33 +253,23 @@ mod tests {
     #[test]
     fn test_dealer_prob_beating() {
         let mut deck: Deck = shoe!(DECKS);
-        let upcard: Rank = 1;
-        deck[upcard as usize] -= 1;
+        let upcard = A;
+        // deck[upcard as usize] -= 1;
 
-        // let (dealer_win, push) = dealer_probabilities_beating(16, hand![upcard], &deck);
-        // println!("Player Win: {}\nPush: {}\nDealer Win: {}", 1f64 - push - dealer_win, push, dealer_win);
-    }
-
-    #[test]
-    fn test_all_dealer_prob() {
-        let mut deck: Deck = shoe!(DECKS);
-        let upcard: Rank = 1;
-        deck[upcard as usize] -= 1;
-
-        println!("Dealer bust with {} up: {:?}", upcard, all_dealer_probabilities(upcard, &deck));
+        let (dealer_win, push) = dealer_probabilities_beating(16, PartialDealerHand::single(upcard), deck);
+        println!("Player Win: {}\nPush: {}\nDealer Win: {}", 1f64 - push - dealer_win, push, dealer_win);
     }
 
     #[test]
     fn test_ev() {
         let deck: Deck = shoe!(DECKS);
-        let upcard: Rank = 2;
-        let player = hand![2, 3];
-        // let dealer_p = all_dealer_probabilities(upcard, &deck);
+        let upcard: Rank = A;
+        let player = hand![8, 8];
 
         // let evx = ev_double(&player, upcard, 1f64, &deck2);
         // println!("evx={}", evx);
         let result = ev(PartialHand::from(player.clone()), 1, upcard,  deck.clone());
-        println!("Fast: The EV of {:?} vs {} is {}. You should {:?}.", player, upcard, result.ev, result.action);
+        println!("The EV of {:?} vs {} is {}. You should {:?}.", player, upcard, result.ev, result.action);
         for choice in result.choices {
             if choice.1 != f64::NEG_INFINITY {
                 println!(" -> {:?} = {}", choice.0, choice.1);

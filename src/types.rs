@@ -4,6 +4,7 @@ pub type Rank = i32;
 pub type Deck = [u32; 10];
 
 pub const RANKS: RangeInclusive<Rank> = 0..=9;
+pub const N_RANKS: usize = 10;
 pub const T: Rank = 0;
 pub const A: Rank = 1;
 
