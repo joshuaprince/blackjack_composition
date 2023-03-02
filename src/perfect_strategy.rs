@@ -3,7 +3,8 @@ use std::cmp::Ordering;
 use enum_map::EnumMap;
 use memoize::memoize;
 
-use crate::hand::{Hand};
+use crate::deck::Deck;
+use crate::hand::Hand;
 use crate::perfect_strategy::hashed_hand::{HashedDealerHand, HashedPlayerHand};
 use crate::RULES;
 use crate::types::{*};
@@ -30,12 +31,12 @@ pub struct EvCalcResult {
 ///                 rule set.
 /// * `dealer_up` - The card that the dealer is showing.
 /// * `deck` - The remaining draw pile, as currently known at the time the action is taken.
-pub fn perfect_play(hand: &Hand, num_hands: i32, dealer_up: Rank, deck: &Deck) -> EvCalcResult {
+pub fn perfect_play(hand: &Hand, num_hands: u32, dealer_up: Rank, deck: &Deck) -> EvCalcResult {
     ev(HashedPlayerHand::from(hand.clone()), num_hands, dealer_up, *deck)
 }
 
 #[memoize(Capacity: 100_000)]
-fn ev(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: Deck) -> EvCalcResult {
+fn ev(player_hand: HashedPlayerHand, num_hands: u32, upcard: Rank, deck: Deck) -> EvCalcResult {
     let mut choices = EnumMap::from_array([f64::NEG_INFINITY; 4]);
 
     if player_hand.total > 21 {
@@ -55,9 +56,9 @@ fn ev(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: Deck) -
 
     // Return the choice that maximizes expected value.
     let mut max_ev_choice = Action::Stand;
-    for option in choices {
-        if option.1 > choices[max_ev_choice] {
-            max_ev_choice = option.0;
+    for (action, action_ev) in choices {
+        if action_ev > choices[max_ev_choice] {
+            max_ev_choice = action;
         }
     }
     EvCalcResult { ev: choices[max_ev_choice], action: max_ev_choice, choices }
@@ -76,39 +77,37 @@ fn ev_stand(player_hand: HashedPlayerHand, upcard: Rank, deck: &Deck) -> f64 {
     p_player_win - p_dealer_win
 }
 
-fn ev_hit(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: &Deck, can_act_again: bool) -> f64 {
+fn ev_hit(player_hand: HashedPlayerHand, num_hands: u32, upcard: Rank, deck: &Deck, can_act_again: bool) -> f64 {
     // Base case - the player busted.
     if player_hand.total > 21 {
-        return -1f64 as f64;
+        return -1f64;
     }
 
     // Recursive case - what can happen with the next card?
     let p_next_card_is = p_next_card_is_each(&deck, true, true);
     let mut cumul_ev = 0f64;
     for next_card in RANKS {
-        if p_next_card_is[next_card as usize] <= 0f64 {
+        if p_next_card_is[next_card] <= 0f64 {
             continue;
         }
 
-        let mut deck_after_this_card = deck.clone();
-        deck_after_this_card[next_card as usize] -= 1;
-
+        let deck_after_this_card = deck.removed(next_card);
         if can_act_again {
-            cumul_ev += p_next_card_is[next_card as usize] * ev(player_hand + next_card, num_hands, upcard, deck_after_this_card).ev;
+            cumul_ev += p_next_card_is[next_card] * ev(player_hand + next_card, num_hands, upcard, deck_after_this_card).ev;
         } else {
-            cumul_ev += p_next_card_is[next_card as usize] * ev_stand(player_hand + next_card, upcard, &deck_after_this_card);
+            cumul_ev += p_next_card_is[next_card] * ev_stand(player_hand + next_card, upcard, &deck_after_this_card);
         }
     }
 
     cumul_ev
 }
 
-fn ev_double(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: &Deck) -> f64 {
+fn ev_double(player_hand: HashedPlayerHand, num_hands: u32, upcard: Rank, deck: &Deck) -> f64 {
     // Not recursive - only 1 card left.
     2f64 * ev_hit(player_hand, num_hands, upcard, deck, false)
 }
 
-fn ev_split(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: &Deck) -> f64 {
+fn ev_split(player_hand: HashedPlayerHand, num_hands: u32, upcard: Rank, deck: &Deck) -> f64 {
     // This function returns the total EV of both split hands added together.
 
     let split_card = player_hand.is_pair.unwrap();
@@ -118,19 +117,17 @@ fn ev_split(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: &
     let p_next_card_is = p_next_card_is_each(&deck, true, true);
     let mut cumul_ev = 0f64;
     for next_card in RANKS {
-        if p_next_card_is[next_card as usize] <= 0f64 {
+        if p_next_card_is[next_card] <= 0f64 {
             continue;
         }
 
-        let mut deck_after_this_card = deck.clone();
-        deck_after_this_card[next_card as usize] -= 1;
-
+        let deck_after_this_card = deck.removed(next_card);
         if can_act_after {
             let ev_with = ev(HashedPlayerHand::from_two_cards(split_card, next_card), num_hands + 1, upcard, deck_after_this_card).ev;
-            cumul_ev += ev_with * p_next_card_is[next_card as usize];
+            cumul_ev += ev_with * p_next_card_is[next_card];
         } else {
             let ev_standing = ev_stand(HashedPlayerHand::from_two_cards(split_card, next_card), upcard, &deck_after_this_card);
-            cumul_ev += ev_standing * p_next_card_is[next_card as usize];
+            cumul_ev += ev_standing * p_next_card_is[next_card];
         }
     }
 
@@ -141,29 +138,29 @@ fn ev_split(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: &
 /// Example: For a deck of [2, 1, 0, .., 1]:
 ///            If ten and ace are possible, returns [0.5, 0.25, 0, .., 0.25]
 ///            If ten is not possible, returns [0, 0.5, 0, .., 0.5]
-fn p_next_card_is_each(deck: &Deck, can_be_ten: bool, can_be_ace: bool) -> [f64; N_RANKS] {
-    let mut p = [0f64; N_RANKS];
+fn p_next_card_is_each(deck: &Deck, can_be_ten: bool, can_be_ace: bool) -> RankArray<f64> {
+    let mut p = RankArray::default();
 
-    let mut total_next_card_possibilities: u32 = deck.iter().sum();
+    let mut total_next_card_possibilities: u32 = deck.len();
     if !can_be_ten {
-        total_next_card_possibilities -= deck[T as usize];
+        total_next_card_possibilities -= deck[T];
     }
     if !can_be_ace {
-        total_next_card_possibilities -= deck[A as usize];
+        total_next_card_possibilities -= deck[A];
     }
 
     for next_card in RANKS {
-        if deck[next_card as usize] == 0
+        if deck[next_card] == 0
             || (!can_be_ten && next_card == T)
             || (!can_be_ace && next_card == A) {
             continue;
         }
 
-        p[next_card as usize] = deck[next_card as usize] as f64 / total_next_card_possibilities as f64;
+        p[next_card] = deck[next_card] as f64 / total_next_card_possibilities as f64;
     }
 
     // Validation - delete
-    let total_p: f64 = p.iter().sum();
+    let total_p: f64 = p.sum();
     assert!(total_p > 0.99999f64);
     assert!(total_p < 1.00001f64);
 
@@ -173,7 +170,7 @@ fn p_next_card_is_each(deck: &Deck, can_be_ten: bool, can_be_ace: bool) -> [f64;
 /// Probability dealer beats this score / pushes with this score.
 /// Note: Assumes that the dealer already checked for Blackjack!
 #[memoize(Capacity: 100_000)]
-fn dealer_probabilities_beating(player_hand_to_beat: i32, dealer_hand: HashedDealerHand, deck: Deck) -> (f64, f64) {
+fn dealer_probabilities_beating(player_hand_to_beat: u32, dealer_hand: HashedDealerHand, deck: Deck) -> (f64, f64) {
     // Base cases - the dealer is finished playing.
     if dealer_hand.total >= 18 || (dealer_hand.total >= 17 && (!RULES.hit_soft_17 || !dealer_hand.is_soft)) {
         if player_hand_to_beat > 21 {
@@ -196,24 +193,22 @@ fn dealer_probabilities_beating(player_hand_to_beat: i32, dealer_hand: HashedDea
     let mut cumul_prob_dealer_win = 0f64;
     let mut cumul_prob_push = 0f64;
     for next_card in RANKS {
-        if p_next_card_is[next_card as usize] <= 0f64 {
+        if p_next_card_is[next_card] <= 0f64 {
             continue;
         }
 
-        let mut deck_after_this_card = deck.clone();
-        deck_after_this_card[next_card as usize] -= 1;
-
+        let deck_after_this_card = deck.removed(next_card);
         let (win_prob_with_this_card, push_prob_with_this_card) =
             dealer_probabilities_beating(player_hand_to_beat, dealer_hand + next_card, deck_after_this_card);
 
-        cumul_prob_dealer_win += win_prob_with_this_card * p_next_card_is[next_card as usize];
-        cumul_prob_push += push_prob_with_this_card * p_next_card_is[next_card as usize];
+        cumul_prob_dealer_win += win_prob_with_this_card * p_next_card_is[next_card];
+        cumul_prob_push += push_prob_with_this_card * p_next_card_is[next_card];
     }
 
     (cumul_prob_dealer_win, cumul_prob_push)
 }
 
-fn can_double(player_hand: &HashedPlayerHand, num_hands: i32) -> bool {
+fn can_double(player_hand: &HashedPlayerHand, num_hands: u32) -> bool {
     if !player_hand.is_two {
         return false;
     }
@@ -234,7 +229,7 @@ fn can_double(player_hand: &HashedPlayerHand, num_hands: i32) -> bool {
     false
 }
 
-fn can_split(player_hand: &HashedPlayerHand, num_hands: i32) -> bool {
+fn can_split(player_hand: &HashedPlayerHand, num_hands: u32) -> bool {
     let max_hands_allowed = match player_hand.is_pair {
         Some(A) => RULES.split_aces_limit,
         Some(_) => RULES.split_hands_limit,
@@ -245,10 +240,10 @@ fn can_split(player_hand: &HashedPlayerHand, num_hands: i32) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::{hand, shoe};
+    use crate::{deck, hand, shoe};
+    use crate::deck::Deck;
     use crate::perfect_strategy::*;
     use crate::simulation::{play_hand, PlayerDecisionMethod};
-    use crate::types::{Deck, Rank};
 
     const DECKS: u32 = 1;
 
@@ -256,7 +251,7 @@ mod tests {
     fn test_dealer_prob_beating() {
         let mut deck: Deck = shoe!(DECKS);
         let upcard = A;
-        // deck[upcard as usize] -= 1;
+        // deck[upcard as u32] -= 1;
 
         let (dealer_win, push) = dealer_probabilities_beating(16, HashedDealerHand::from_single_card(upcard), deck);
         println!("Player Win: {}\nPush: {}\nDealer Win: {}", 1f64 - push - dealer_win, push, dealer_win);
@@ -272,9 +267,9 @@ mod tests {
         // println!("evx={}", evx);
         let result = ev(HashedPlayerHand::from(player.clone()), 1, upcard, deck.clone());
         println!("The EV of {:?} vs {} is {}. You should {:?}.", player, upcard, result.ev, result.action);
-        for choice in result.choices {
-            if choice.1 != f64::NEG_INFINITY {
-                println!(" -> {:?} = {}", choice.0, choice.1);
+        for (action, action_ev) in result.choices {
+            if action_ev != f64::NEG_INFINITY {
+                println!(" -> {:?} = {}", action, action_ev);
             }
         }
     }
@@ -283,7 +278,7 @@ mod tests {
     fn test_simulate_hand() {
         // No double possible
         // Dealer down card cannot be an ace
-        let deck: Deck = [11, 3, 0, 1, 1, 0, 2, 2, 2, 3];
+        let deck = deck![11, 3, 0, 1, 1, 0, 2, 2, 2, 3];
         let upcard: Rank = 5;
         let player_hands = vec![hand![T, T]];
         let sims = 10;

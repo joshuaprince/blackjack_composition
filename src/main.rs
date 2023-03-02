@@ -1,14 +1,17 @@
 use std::{thread, time};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use derive_more::{Add, AddAssign};
 
 use crate::basic_strategy::BasicStrategyChart;
+use crate::deck::Deck;
 use crate::rules::*;
 use crate::simulation::{play_hand, PlayerDecisionMethod, SimulationResult};
 use crate::strategy_comparison::{BasicPerfectComparison, COMP_CHART};
 
 mod basic_strategy;
+mod deck;
 mod hand;
 mod perfect_strategy;
 mod rules;
@@ -16,8 +19,8 @@ mod simulation;
 mod strategy_comparison;
 mod types;
 
-const THREADS: i32 = 20;
-const SHOES_PER_REPORT: u64 = 5;  // shoes to play on each thread before reporting results to mutex
+const THREADS: u32 = 20;
+const TIME_BETWEEN_THREAD_REPORTS: Duration = Duration::from_millis(500);
 
 pub static RULES: BlackjackRules = RULES_1D_H17_NDAS_D10;
 
@@ -45,7 +48,7 @@ fn main() {
 
     println!("Simulating rules: {}", RULES);
 
-    let start_time = time::Instant::now();
+    let start_time = Instant::now();
     let mut times_printed: u64 = 0;
     loop {
         thread::sleep(time::Duration::from_secs(1));
@@ -71,9 +74,10 @@ fn play_hands_compare_and_report(
 ) {
     let mut result_accum = ComparisonResult::default();
 
-    for _ in 0..SHOES_PER_REPORT {
+    let start_time = Instant::now();
+    while start_time.elapsed() < TIME_BETWEEN_THREAD_REPORTS {
         let mut deck = shoe!(RULES.decks);
-        while deck.iter().sum::<u32>() > RULES.shuffle_at_cards {
+        while deck.len() > RULES.shuffle_at_cards {
             let (sim, cmp) = play_hand(
                 &mut deck, PlayerDecisionMethod::BasicPerfectComparison(strategy_chart),
             );

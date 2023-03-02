@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
-use crate::hand::{Hand};
+use crate::hand::Hand;
 use crate::rules::BlackjackRules;
 use crate::types::*;
 
@@ -14,7 +14,7 @@ static BS_TABLE_CSV_6D_H17_DAS_DANY: &'static [u8] = include_bytes!("charts/bs_6
 #[derive(PartialEq, Eq, Clone, Copy, Hash)]
 struct ChartKey {
     hand_type: HandType,
-    hand_number: i32,  // total for hard and soft hands, the paired card for pair hands
+    hand_number: u32,  // total for hard and soft hands, the paired card for pair hands
     upcard: Rank,
 }
 
@@ -86,7 +86,7 @@ impl BasicStrategyChart {
     }
 
     /// Determine the play as dictated by this Basic Strategy chart.
-    pub fn basic_play(&self, hand: &Hand, dealer_up: Rank, num_hands: i32) -> Action {
+    pub fn basic_play(&self, hand: &Hand, dealer_up: Rank, num_hands: u32) -> Action {
         let can_double = hand.cards.len() == 2
             && (self.rules.double_after_split || num_hands == 1)
             && (self.rules.double_any_hands ||
@@ -236,8 +236,13 @@ pub fn int_to_rank_str(rank: Rank) -> &'static str {
     }
 }
 
-/// Convert ranks from the CSV totals (left side) to ints
-fn csv_hand_num_to_int(total_str: &str, hand_type: HandType) -> Option<i32> {
+/// Convert totals or ranks from the CSV totals (left side) to ints.
+///
+/// # Arguments
+/// * `total_str` - The left-side header of a CSV row, for example "17" (hard/soft) or "A" (pair
+///                 only)
+/// * `hand_type` - Hard, Soft, or Pair
+fn csv_hand_num_to_int(total_str: &str, hand_type: HandType) -> Option<u32> {
     match hand_type {
         HandType::Pair => csv_rank_to_int(total_str),
         _ => total_str.parse().ok()
@@ -271,8 +276,8 @@ fn to_letters(actions: (Action, Option<Action>)) -> &'static str {
 #[cfg(test)]
 mod tests {
     use crate::basic_strategy::{Action, BasicStrategyChart};
-    use crate::hand::Hand;
     use crate::hand;
+    use crate::hand::Hand;
     use crate::rules::RULES_6D_H17_DAS_DANY;
     use crate::types::{A, T};
 

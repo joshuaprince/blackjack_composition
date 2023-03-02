@@ -26,7 +26,7 @@ macro_rules! hand {
 impl Hand {
     /// Sum total of this hand, returning the "high" total for soft hands but not accounting for
     /// Blackjack bonuses or busts.
-    pub fn total(&self) -> i32 {
+    pub fn total(&self) -> u32 {
         self._total_internal().0
     }
 
@@ -46,9 +46,9 @@ impl Hand {
         }
     }
 
-    fn _total_internal(&self) -> (i32, bool) {
+    fn _total_internal(&self) -> (u32, bool) {
         let mut contains_ace = false;
-        let mut total = 0;
+        let mut total: u32 = 0;
         for card in &self.cards {
             total += match *card {
                 T => 10,
@@ -65,11 +65,11 @@ impl Hand {
     }
 }
 
-impl Index<usize> for Hand {
+impl Index<u32> for Hand {
     type Output = Rank;
 
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.cards[index]
+    fn index(&self, index: u32) -> &Self::Output {
+        &self.cards[index as usize]
     }
 }
 

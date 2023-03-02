@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::sync::Mutex;
+
 use derive_more::{Add, AddAssign};
 use memoize::lazy_static::lazy_static;
 
-use crate::basic_strategy::{BasicStrategyChart, int_to_rank_str};
-use crate::hand::{Hand};
 use crate::{perfect_strategy, RULES};
-use crate::types::{A, Action, Deck, HandType, Rank, RANKS};
+use crate::basic_strategy::{BasicStrategyChart, int_to_rank_str};
+use crate::deck::Deck;
+use crate::hand::Hand;
+use crate::types::{A, Action, HandType, Rank, RANKS};
 
 #[derive(Default, Add, AddAssign)]
 pub struct BasicPerfectComparison {
@@ -16,7 +18,7 @@ pub struct BasicPerfectComparison {
 }
 
 pub fn decide(basic_chart: &BasicStrategyChart, hand: &Hand, dealer_up: Rank,
-              num_hands: i32, deck: &Deck) -> (Action, BasicPerfectComparison) {
+              num_hands: u32, deck: &Deck) -> (Action, BasicPerfectComparison) {
     let bs_decision = basic_chart.basic_play(hand, dealer_up, num_hands);
     let ps_calc = perfect_strategy::perfect_play(hand, num_hands, dealer_up, deck);
     let ps_decision = ps_calc.action;
@@ -57,7 +59,7 @@ pub fn decide(basic_chart: &BasicStrategyChart, hand: &Hand, dealer_up: Rank,
 #[derive(PartialEq, Eq, Clone, Copy, Hash)]
 struct ChartKey {
     hand_type: HandType,
-    hand_number: i32,  // total for hard and soft hands, the paired card for pair hands
+    hand_number: u32,  // total for hard and soft hands, the paired card for pair hands
     upcard: Rank,
 }
 
@@ -98,7 +100,7 @@ lazy_static! {
 }
 
 impl ComparisonBSChart {
-    fn see(&mut self, hand: &Hand, dealer_up: Rank, num_hands: i32, deviated: bool) {
+    fn see(&mut self, hand: &Hand, dealer_up: Rank, num_hands: u32, deviated: bool) {
         let is_splittable_pair = num_hands < match hand.is_pair() {
             Some(A) => RULES.split_aces_limit,
             Some(_) => RULES.split_hands_limit,

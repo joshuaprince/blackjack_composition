@@ -1,10 +1,10 @@
 use std::cmp::Ordering;
 
 use derive_more::{Add, AddAssign};
-use rand::distributions::{Distribution, WeightedIndex};
 
 use crate::{hand, perfect_strategy, RULES, strategy_comparison};
 use crate::basic_strategy::BasicStrategyChart;
+use crate::deck::Deck;
 use crate::hand::*;
 use crate::strategy_comparison::BasicPerfectComparison;
 use crate::types::*;
@@ -35,8 +35,8 @@ pub fn play_hand(
     deck: &mut Deck,
     player_decision: PlayerDecisionMethod,
 ) -> (SimulationResult, BasicPerfectComparison) {
-    let mut dealer_hand = hand![draw(deck), draw(deck)];
-    let mut player_hands: Vec<Hand> = vec![hand![draw(deck), draw(deck)]];
+    let mut dealer_hand = hand![deck.draw(), deck.draw()];
+    let mut player_hands: Vec<Hand> = vec![hand![deck.draw(), deck.draw()]];
     let mut bet_units: Vec<f64> = vec![1.0];
 
     let mut result = SimulationResult::default();
@@ -60,15 +60,15 @@ pub fn play_hand(
         while can_act_again_this_hand && can_act_again_at_all {
             let decision = match player_decision {
                 PlayerDecisionMethod::BasicStrategy(chart) => {
-                    chart.basic_play(&player_hands[hand_idx], dealer_hand[0], player_hands.len() as i32)
+                    chart.basic_play(&player_hands[hand_idx], dealer_hand[0], player_hands.len() as u32)
                 },
                 PlayerDecisionMethod::PerfectStrategy => {
-                    perfect_strategy::perfect_play(&player_hands[hand_idx], player_hands.len() as i32, dealer_hand[0], deck).action
+                    perfect_strategy::perfect_play(&player_hands[hand_idx], player_hands.len() as u32, dealer_hand[0], deck).action
                 },
                 PlayerDecisionMethod::BasicPerfectComparison(bs_chart) => {
                     let (action, comp) = strategy_comparison::decide(
                         bs_chart, &player_hands[hand_idx], dealer_hand[0],
-                        player_hands.len() as i32, deck
+                        player_hands.len() as u32, deck
                     );
                     comparison += comp;
                     action
@@ -79,24 +79,24 @@ pub fn play_hand(
 
             match decision {
                 Action::Stand => { can_act_again_this_hand = false; }
-                Action::Hit => { player_hands[hand_idx] += draw(deck); }
+                Action::Hit => { player_hands[hand_idx] += deck.draw(); }
                 Action::Double => {
                     bet_units[hand_idx] *= 2.0;
-                    player_hands[hand_idx] += draw(deck);
+                    player_hands[hand_idx] += deck.draw();
                     can_act_again_this_hand = false;
                 }
                 Action::Split => {
                     // Create new hand at the end of the current list
                     let split_rank = player_hands[hand_idx][1];
-                    player_hands.push(hand![split_rank, draw(deck)]);
+                    player_hands.push(hand![split_rank, deck.draw()]);
                     bet_units.push(bet_units[hand_idx]);
 
                     // Draw and replace the second card in this current hand
-                    player_hands[hand_idx].cards[1] = draw(deck);
+                    player_hands[hand_idx].cards[1] = deck.draw();
 
                     if !RULES.hit_split_aces && split_rank == A {
                         assert_eq!(RULES.split_aces_limit, 2, "TODO: Can't support resplit aces.");
-                        player_hands[hand_idx + 1].cards[1] = draw(deck);
+                        player_hands[hand_idx + 1].cards[1] = deck.draw();
                         can_act_again_at_all = false;
                     }
                 }
@@ -123,7 +123,7 @@ pub fn play_hand(
                     break;
                 }
             }
-            dealer_hand += draw(deck);
+            dealer_hand += deck.draw();
         }
     }
 
@@ -145,18 +145,4 @@ pub fn play_hand(
     }
 
     (result, comparison)
-}
-
-
-/// Pick a random card from a Deck without mutating the Deck.
-fn random_card(deck: Deck) -> Rank {
-    let dist = WeightedIndex::new(deck).unwrap();
-    dist.sample(&mut rand::thread_rng()) as Rank
-}
-
-/// Draw a random card from a Deck and remove it from the Deck.
-fn draw(deck: &mut Deck) -> Rank {
-    let card = random_card(*deck);
-    deck[card as usize] -= 1;
-    card
 }

@@ -1,5 +1,6 @@
 use std::ops;
-use crate::hand::{Hand};
+
+use crate::hand::Hand;
 use crate::hand;
 use crate::types::{A, Rank, T};
 
@@ -13,7 +14,7 @@ use crate::types::{A, Rank, T};
 pub struct HashedPlayerHand {
     /// Sum total of this hand, returning the "high" total for soft hands but not accounting for
     /// Blackjack bonuses or busts.
-    pub total: i32,
+    pub total: u32,
 
     /// Whether this hand is soft.
     pub is_soft: bool,
@@ -37,7 +38,7 @@ pub struct HashedPlayerHand {
 pub struct HashedDealerHand {
     /// Sum total of this hand, returning the "high" total for soft hands but not accounting for
     /// Blackjack bonuses or busts.
-    pub total: i32,
+    pub total: u32,
 
     /// Whether this hand is soft.
     pub is_soft: bool,
