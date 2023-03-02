@@ -3,10 +3,10 @@ use std::cmp::Ordering;
 use derive_more::{Add, AddAssign};
 use rand::distributions::{Distribution, WeightedIndex};
 
-use crate::{complex_strategy, hand, RULES, strategy_comparison};
+use crate::{hand, perfect_strategy, RULES, strategy_comparison};
 use crate::basic_strategy::BasicStrategyChart;
 use crate::bj_helper::*;
-use crate::strategy_comparison::BasicComplexComparison;
+use crate::strategy_comparison::BasicPerfectComparison;
 use crate::types::*;
 
 #[derive(Default, Add, AddAssign)]
@@ -17,10 +17,10 @@ pub struct SimulationResult {
     pub roi: f64,
 }
 
-pub enum PlayerDecision<'a> {
+pub enum PlayerDecisionMethod<'a> {
     BasicStrategy(&'a BasicStrategyChart),
-    ComplexStrategy,
-    BasicComplexCompare(&'a BasicStrategyChart),
+    PerfectStrategy,
+    BasicPerfectComparison(&'a BasicStrategyChart),
 }
 
 /// Play out one complete hand with the given starting deck.
@@ -33,8 +33,8 @@ pub enum PlayerDecision<'a> {
 /// make.
 pub fn play_hand(
     deck: &mut Deck,
-    player_decision: PlayerDecision,
-) -> (SimulationResult, BasicComplexComparison) {
+    player_decision: PlayerDecisionMethod,
+) -> (SimulationResult, BasicPerfectComparison) {
     let mut dealer_hand = hand![draw(deck), draw(deck)];
     let mut player_hands: Vec<CardHand> = vec![hand![draw(deck), draw(deck)]];
     let mut bet_units: Vec<f64> = vec![1.0];
@@ -42,7 +42,7 @@ pub fn play_hand(
     let mut result = SimulationResult::default();
     result.hands_played += 1;
 
-    let mut comparison = BasicComplexComparison::default();
+    let mut comparison = BasicPerfectComparison::default();
 
     // Check for dealt Blackjacks
     match (dealer_hand.total(), &player_hands[0].total()) {
@@ -59,13 +59,13 @@ pub fn play_hand(
         let mut can_act_again_this_hand = true;
         while can_act_again_this_hand && can_act_again_at_all {
             let decision = match player_decision {
-                PlayerDecision::BasicStrategy(chart) => {
+                PlayerDecisionMethod::BasicStrategy(chart) => {
                     chart.basic_play(&player_hands[hand_idx], dealer_hand[0], player_hands.len() as i32)
                 },
-                PlayerDecision::ComplexStrategy => {
-                    complex_strategy::play(&player_hands[hand_idx], player_hands.len() as i32, dealer_hand[0], deck).action
+                PlayerDecisionMethod::PerfectStrategy => {
+                    perfect_strategy::play(&player_hands[hand_idx], player_hands.len() as i32, dealer_hand[0], deck).action
                 },
-                PlayerDecision::BasicComplexCompare(bs_chart) => {
+                PlayerDecisionMethod::BasicPerfectComparison(bs_chart) => {
                     let (action, comp) = strategy_comparison::decide(
                         bs_chart, &player_hands[hand_idx], dealer_hand[0],
                         player_hands.len() as i32, deck

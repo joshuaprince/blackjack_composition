@@ -5,12 +5,12 @@ use derive_more::{Add, AddAssign};
 
 use crate::basic_strategy::BasicStrategyChart;
 use crate::rules::*;
-use crate::simulation::{play_hand, PlayerDecision, SimulationResult};
-use crate::strategy_comparison::{BasicComplexComparison, COMP_CHART};
+use crate::simulation::{play_hand, PlayerDecisionMethod, SimulationResult};
+use crate::strategy_comparison::{BasicPerfectComparison, COMP_CHART};
 
 mod basic_strategy;
 mod bj_helper;
-mod complex_strategy;
+mod perfect_strategy;
 mod rules;
 mod simulation;
 mod strategy_comparison;
@@ -24,7 +24,7 @@ pub static RULES: BlackjackRules = RULES_1D_H17_NDAS_D10;
 #[derive(Default, Add, AddAssign)]
 struct ComparisonResult {
     sim: SimulationResult,
-    comparison: BasicComplexComparison,
+    comparison: BasicPerfectComparison,
 }
 
 fn main() {
@@ -75,7 +75,7 @@ fn play_hands_compare_and_report(
         let mut deck = shoe!(RULES.decks);
         while deck.iter().sum::<u32>() > RULES.shuffle_at_cards {
             let (sim, cmp) = play_hand(
-                &mut deck, PlayerDecision::BasicComplexCompare(strategy_chart)
+                &mut deck, PlayerDecisionMethod::BasicPerfectComparison(strategy_chart),
             );
             result_accum.sim += sim;
             result_accum.comparison += cmp;

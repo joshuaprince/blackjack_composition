@@ -244,8 +244,8 @@ fn can_split(player_hand: &PartialHand, num_hands: i32) -> bool {
 #[cfg(test)]
 mod tests {
     use crate::{hand, shoe};
-    use crate::complex_strategy::*;
-    use crate::simulation::{play_hand, PlayerDecision};
+    use crate::perfect_strategy::*;
+    use crate::simulation::{play_hand, PlayerDecisionMethod};
     use crate::types::{Deck, Rank};
 
     const DECKS: u32 = 1;
@@ -292,7 +292,7 @@ mod tests {
 
         for _ in 0..sims {
             let mut deck = deck.clone();
-            roi += play_hand(&mut deck, PlayerDecision::ComplexStrategy).0.roi
+            roi += play_hand(&mut deck, PlayerDecisionMethod::PerfectStrategy).0.roi
         }
 
         println!("Total ROI: {} EV: {:+}%", roi, roi as f64 / sims as f64 * 100.0);

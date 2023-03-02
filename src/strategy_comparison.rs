@@ -6,23 +6,23 @@ use memoize::lazy_static::lazy_static;
 
 use crate::basic_strategy::{BasicStrategyChart, int_to_rank_str};
 use crate::bj_helper::{CardHand, Hand, PlayerHand};
-use crate::{complex_strategy, RULES};
+use crate::{perfect_strategy, RULES};
 use crate::rules::BlackjackRules;
 use crate::types::{A, Action, Deck, HandType, Rank, RANKS};
 
 #[derive(Default, Add, AddAssign)]
-pub struct BasicComplexComparison {
+pub struct BasicPerfectComparison {
     pub deviations: u64,
     pub gained_ev: f64,
 }
 
 pub fn decide(basic_chart: &BasicStrategyChart, hand: &CardHand, dealer_up: Rank,
-              num_hands: i32, deck: &Deck) -> (Action, BasicComplexComparison) {
+              num_hands: i32, deck: &Deck) -> (Action, BasicPerfectComparison) {
     let bs_decision = basic_chart.basic_play(hand, dealer_up, num_hands);
-    let cs_calc = complex_strategy::play(hand, num_hands, dealer_up, deck);
+    let cs_calc = perfect_strategy::play(hand, num_hands, dealer_up, deck);
     let cs_decision = cs_calc.action;
 
-    let mut cmp_stats = BasicComplexComparison::default();
+    let mut cmp_stats = BasicPerfectComparison::default();
 
     let deviated = if bs_decision != cs_decision {
         cmp_stats.deviations += 1;
