@@ -3,26 +3,15 @@ use std::cmp::Ordering;
 use enum_map::EnumMap;
 use memoize::memoize;
 
-use crate::bj_helper::{CardHand, Hand, PartialDealerHand, PartialHand, PlayerHand};
+use crate::bj_helper::{CardHand, Hand, PlayerHand};
+use crate::perfect_strategy::hashed_hand::{HashedDealerHand, HashedPlayerHand};
 use crate::RULES;
 use crate::types::{*};
 
+mod hashed_hand;
+
 pub fn play(hand: &CardHand, num_hands: i32, dealer_up: Rank, deck: &Deck) -> EvCalcResult {
-    ev(PartialHand::from(hand.clone()), num_hands, dealer_up, *deck)
-}
-
-pub fn play_shortcuts(hand: &CardHand, num_hands: i32, dealer_up: Rank, deck: &Deck) -> Action {
-    if hand.total() <= 11 &&
-        !can_split(&PartialHand::from(hand.clone()), num_hands) &&
-        !can_double(&PartialHand::from(hand.clone()), num_hands) {
-        return Action::Hit;
-    }
-
-    if hand.total() == 21 {
-        return Action::Stand;
-    }
-
-    play(hand, num_hands, dealer_up, deck).action
+    ev(HashedPlayerHand::from(hand.clone()), num_hands, dealer_up, *deck)
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
@@ -33,7 +22,7 @@ pub struct EvCalcResult {
 }
 
 #[memoize(Capacity: 100_000)]
-fn ev(player_hand: PartialHand, num_hands: i32, upcard: Rank, deck: Deck) -> EvCalcResult {
+fn ev(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: Deck) -> EvCalcResult {
     let mut choices = EnumMap::from_array([f64::NEG_INFINITY; 4]);
 
     if player_hand.total() > 21 {
@@ -61,20 +50,20 @@ fn ev(player_hand: PartialHand, num_hands: i32, upcard: Rank, deck: Deck) -> EvC
     EvCalcResult { ev: choices[max_ev_choice], action: max_ev_choice, choices }
 }
 
-fn ev_stand(player_hand: PartialHand, upcard: Rank, deck: &Deck) -> f64 {
+fn ev_stand(player_hand: HashedPlayerHand, upcard: Rank, deck: &Deck) -> f64 {
     if player_hand.total() > 21 {
         return -1f64;
     }
 
     let (p_dealer_win, p_push) = dealer_probabilities_beating(
-        player_hand.total(), PartialDealerHand::single(upcard), *deck
+        player_hand.total(), HashedDealerHand::single(upcard), *deck
     );
     let p_player_win: f64 = 1f64 - p_dealer_win - p_push;
 
     p_player_win - p_dealer_win
 }
 
-fn ev_hit(player_hand: PartialHand, num_hands: i32, upcard: Rank, deck: &Deck, can_act_again: bool) -> f64 {
+fn ev_hit(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: &Deck, can_act_again: bool) -> f64 {
     // Base case - the player busted.
     if player_hand.total() > 21 {
         return -1f64 as f64;
@@ -101,12 +90,12 @@ fn ev_hit(player_hand: PartialHand, num_hands: i32, upcard: Rank, deck: &Deck, c
     cumul_ev
 }
 
-fn ev_double(player_hand: PartialHand, num_hands: i32, upcard: Rank, deck: &Deck) -> f64 {
+fn ev_double(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: &Deck) -> f64 {
     // Not recursive - only 1 card left.
     2f64 * ev_hit(player_hand, num_hands, upcard, deck, false)
 }
 
-fn ev_split(player_hand: PartialHand, num_hands: i32, upcard: Rank, deck: &Deck) -> f64 {
+fn ev_split(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: &Deck) -> f64 {
     // This function returns the total EV of both split hands.
 
     let split_card = player_hand.is_pair().unwrap();
@@ -124,10 +113,10 @@ fn ev_split(player_hand: PartialHand, num_hands: i32, upcard: Rank, deck: &Deck)
         deck_after_this_card[next_card as usize] -= 1;
 
         if can_act_after {
-            let ev_with = ev(PartialHand::from_two(split_card, next_card), num_hands + 1, upcard, deck_after_this_card).ev;
-            cumul_ev += ev_with * p_next_card_is[next_card as usize];;
+            let ev_with = ev(HashedPlayerHand::from_two(split_card, next_card), num_hands + 1, upcard, deck_after_this_card).ev;
+            cumul_ev += ev_with * p_next_card_is[next_card as usize];
         } else {
-            let ev_standing = ev_stand(PartialHand::from_two(split_card, next_card), upcard, &deck_after_this_card);
+            let ev_standing = ev_stand(HashedPlayerHand::from_two(split_card, next_card), upcard, &deck_after_this_card);
             cumul_ev += ev_standing * p_next_card_is[next_card as usize];
         }
     }
@@ -171,7 +160,7 @@ fn p_next_card_is_each(deck: &Deck, can_be_ten: bool, can_be_ace: bool) -> [f64;
 /// Probability dealer beats this score / pushes with this score.
 /// Note: Assumes that the dealer already checked for Blackjack!
 #[memoize(Capacity: 100_000)]
-fn dealer_probabilities_beating(player_hand_to_beat: i32, dealer_hand: PartialDealerHand, deck: Deck) -> (f64, f64) {
+fn dealer_probabilities_beating(player_hand_to_beat: i32, dealer_hand: HashedDealerHand, deck: Deck) -> (f64, f64) {
     // Base cases - the dealer is finished playing.
     if dealer_hand.total() >= 18 || (dealer_hand.total() >= 17 && (!RULES.hit_soft_17 || !dealer_hand.is_soft())) {
         if player_hand_to_beat > 21 {
@@ -211,7 +200,7 @@ fn dealer_probabilities_beating(player_hand_to_beat: i32, dealer_hand: PartialDe
     (cumul_prob_dealer_win, cumul_prob_push)
 }
 
-fn can_double(player_hand: &PartialHand, num_hands: i32) -> bool {
+fn can_double(player_hand: &HashedPlayerHand, num_hands: i32) -> bool {
     if !player_hand.is_two() {
         return false;
     }
@@ -232,7 +221,7 @@ fn can_double(player_hand: &PartialHand, num_hands: i32) -> bool {
     false
 }
 
-fn can_split(player_hand: &PartialHand, num_hands: i32) -> bool {
+fn can_split(player_hand: &HashedPlayerHand, num_hands: i32) -> bool {
     let max_hands_allowed = match player_hand.is_pair() {
         Some(A) => RULES.split_aces_limit,
         Some(_) => RULES.split_hands_limit,
@@ -256,7 +245,7 @@ mod tests {
         let upcard = A;
         // deck[upcard as usize] -= 1;
 
-        let (dealer_win, push) = dealer_probabilities_beating(16, PartialDealerHand::single(upcard), deck);
+        let (dealer_win, push) = dealer_probabilities_beating(16, HashedDealerHand::single(upcard), deck);
         println!("Player Win: {}\nPush: {}\nDealer Win: {}", 1f64 - push - dealer_win, push, dealer_win);
     }
 
@@ -268,7 +257,7 @@ mod tests {
 
         // let evx = ev_double(&player, upcard, 1f64, &deck2);
         // println!("evx={}", evx);
-        let result = ev(PartialHand::from(player.clone()), 1, upcard,  deck.clone());
+        let result = ev(HashedPlayerHand::from(player.clone()), 1, upcard, deck.clone());
         println!("The EV of {:?} vs {} is {}. You should {:?}.", player, upcard, result.ev, result.action);
         for choice in result.choices {
             if choice.1 != f64::NEG_INFINITY {
@@ -287,7 +276,7 @@ mod tests {
         let sims = 10;
         let mut roi = 0f64;
 
-        let calc_result = ev(PartialHand::from(player_hands[0].clone()), 1, upcard, deck.clone());
+        let calc_result = ev(HashedPlayerHand::from(player_hands[0].clone()), 1, upcard, deck.clone());
         println!("I calculate EV: {:+}%", calc_result.ev * 100.0);
 
         for _ in 0..sims {

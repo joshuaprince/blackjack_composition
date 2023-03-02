@@ -7,7 +7,6 @@ use memoize::lazy_static::lazy_static;
 use crate::basic_strategy::{BasicStrategyChart, int_to_rank_str};
 use crate::bj_helper::{CardHand, Hand, PlayerHand};
 use crate::{perfect_strategy, RULES};
-use crate::rules::BlackjackRules;
 use crate::types::{A, Action, Deck, HandType, Rank, RANKS};
 
 #[derive(Default, Add, AddAssign)]
@@ -40,15 +39,6 @@ pub fn decide(basic_chart: &BasicStrategyChart, hand: &CardHand, dealer_up: Rank
                 println!("++++++++ Considerable Deviation: {:+} ++++++++", gained_ev);
             }
             println!("  Dealer  {:>2} up", dealer_up);
-            // Code for printing multiple hands if available:
-            // for (n, hand) in player_hands.iter().enumerate() {
-            //     if n == hand_idx {
-            //         print!("  >");
-            //     } else {
-            //         print!("   ");
-            //     }
-            //     println!("Player {:>2} {:?}", hand.total(), hand);
-            // }
             println!("  >Player {:>2} {:?} ({} hand(s))", hand.total(), hand, num_hands);
             println!("   Deck: {:?}", deck);
         }
