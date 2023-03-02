@@ -28,6 +28,13 @@ impl Deck {
         card
     }
 
+    /// Get a copy of this Deck with one specific card added.
+    pub fn added(&self, rank: Rank) -> Self {
+        let mut c = self.clone();
+        c.card_counts[rank as usize] += 1;
+        c
+    }
+
     /// Get a copy of this Deck with one specific card removed.
     pub fn removed(&self, rank: Rank) -> Self {
         let mut c = self.clone();

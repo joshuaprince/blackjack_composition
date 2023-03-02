@@ -11,6 +11,7 @@ use crate::types::*;
 
 #[derive(Default, Add, AddAssign)]
 pub struct SimulationResult {
+    pub shoes_played: u64,
     pub hands_played: u64,
     pub decisions_made: u64,
     /// Return on Investment
@@ -33,7 +34,7 @@ pub enum PlayerDecisionMethod<'a> {
 ///                       make.
 pub fn play_hand(
     deck: &mut Deck,
-    player_decision: PlayerDecisionMethod,
+    player_decision_method: PlayerDecisionMethod,
 ) -> (SimulationResult, BasicPerfectComparison) {
     let mut dealer_hand = hand![deck.draw(), deck.draw()];
     let mut player_hands: Vec<Hand> = vec![hand![deck.draw(), deck.draw()]];
@@ -58,17 +59,23 @@ pub fn play_hand(
     while hand_idx < player_hands.len() && can_act_again_at_all {
         let mut can_act_again_this_hand = true;
         while can_act_again_this_hand && can_act_again_at_all {
-            let decision = match player_decision {
+            let current_hand = &player_hands[hand_idx];
+            let dealer_up = dealer_hand[0];
+            let num_hands = player_hands.len() as u32;
+            // Special case: The player does not know the current dealer down card. For purposes of
+            // strategy calculation, we need to act as though that card is still in the deck.
+            let deck_plus_down_card  = deck.added(dealer_hand[1]);
+
+            let decision = match player_decision_method {
                 PlayerDecisionMethod::BasicStrategy(chart) => {
-                    chart.basic_play(&player_hands[hand_idx], dealer_hand[0], player_hands.len() as u32)
+                    chart.basic_play(current_hand, dealer_up, num_hands)
                 },
                 PlayerDecisionMethod::PerfectStrategy => {
-                    perfect_strategy::perfect_play(&player_hands[hand_idx], player_hands.len() as u32, dealer_hand[0], deck).action
+                    perfect_strategy::perfect_play(current_hand, num_hands, dealer_up, &deck_plus_down_card).action
                 },
-                PlayerDecisionMethod::BasicPerfectComparison(bs_chart) => {
+                PlayerDecisionMethod::BasicPerfectComparison(basic_chart) => {
                     let (action, comp) = strategy_comparison::decide(
-                        bs_chart, &player_hands[hand_idx], dealer_hand[0],
-                        player_hands.len() as u32, deck
+                        basic_chart, current_hand, dealer_up, num_hands, &deck_plus_down_card
                     );
                     comparison += comp;
                     action

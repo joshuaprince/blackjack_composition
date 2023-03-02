@@ -29,17 +29,10 @@ pub fn decide(basic_chart: &BasicStrategyChart, hand: &Hand, dealer_up: Rank,
         cmp_stats.deviations += 1;
         let gained_ev = ps_calc.choices[ps_decision] - ps_calc.choices[bs_decision];
         cmp_stats.gained_ev += gained_ev;
-        if gained_ev > 0.35 {
-            println!("Deviated from basic strategy! BS={:?}, PS={:?} ({} vs {})",
+        if gained_ev > 1.0 {
+            println!("Huge deviation from basic strategy! BS={:?}, PS={:?} ({} vs {} = +{} EV)",
                      bs_decision, ps_decision, ps_calc.choices[bs_decision],
-                     ps_calc.choices[ps_decision]);
-            if gained_ev > 1.0 {
-                println!("&&&&&&&& CRITICAL DEVIATION: {:+} &&&&&&&&", gained_ev);
-            } else if gained_ev > 0.6 {
-                println!("!!!!!!!! CONCERNING DEVIATION: {:+} !!!!!!!!", gained_ev);
-            } else {
-                println!("++++++++ Considerable Deviation: {:+} ++++++++", gained_ev);
-            }
+                     ps_calc.choices[ps_decision], gained_ev);
             println!("  Dealer  {:>2} up", dealer_up);
             println!("  >Player {:>2} {:?} ({} hand(s))", hand.total(), hand, num_hands);
             println!("   Deck: {:?}", deck);
@@ -47,7 +40,7 @@ pub fn decide(basic_chart: &BasicStrategyChart, hand: &Hand, dealer_up: Rank,
         true
     } else { false };
 
-    COMP_CHART.lock().unwrap().see(hand, dealer_up, num_hands, deviated);
+    COMPARISON_CHART.lock().unwrap().see(hand, dealer_up, num_hands, deviated);
 
     if ps_calc.choices[bs_decision] == f64::NEG_INFINITY {
         panic!("I made an illegal move.");
@@ -96,7 +89,7 @@ impl Default for ComparisonBSChart {
 }
 
 lazy_static! {
-    pub static ref COMP_CHART: Mutex<ComparisonBSChart> = Mutex::new(ComparisonBSChart::default());
+    pub static ref COMPARISON_CHART: Mutex<ComparisonBSChart> = Mutex::new(ComparisonBSChart::default());
 }
 
 impl ComparisonBSChart {

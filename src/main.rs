@@ -8,7 +8,7 @@ use crate::basic_strategy::BasicStrategyChart;
 use crate::deck::Deck;
 use crate::rules::*;
 use crate::simulation::{play_hand, PlayerDecisionMethod, SimulationResult};
-use crate::strategy_comparison::{BasicPerfectComparison, COMP_CHART};
+use crate::strategy_comparison::{BasicPerfectComparison, COMPARISON_CHART};
 
 mod basic_strategy;
 mod deck;
@@ -50,20 +50,27 @@ fn main() {
 
     let start_time = Instant::now();
     let mut times_printed: u64 = 0;
+    let mut hands_played_last_seen: u64 = 0;
+    let mut shoes_played_last_seen: u64 = 0;
     loop {
         thread::sleep(time::Duration::from_secs(1));
         let s = status.lock().unwrap();
-        println!("Played {} hands and had total of {:+} returned. Edge = {}%, {} hands/sec {}/{} deviant actions {}% average +EV/hand",
-                 s.sim.hands_played, s.sim.roi, s.sim.roi / s.sim.hands_played as f64 * 100f64,
+        println!("Played {} hands ({} shoes) and had total of {:+} returned. Edge = {}%, {} hands/sec total ({} hands/{} shoes in last second), {}/{} deviant actions {}% average +EV/hand",
+                 s.sim.hands_played, s.sim.shoes_played,
+                 s.sim.roi, s.sim.roi / s.sim.hands_played as f64 * 100f64,
                  (s.sim.hands_played as f64 / start_time.elapsed().as_secs_f64()).round(),
+                 (s.sim.hands_played - hands_played_last_seen),
+                 (s.sim.shoes_played - shoes_played_last_seen),
                  s.comparison.deviations, s.sim.decisions_made,
                  s.comparison.gained_ev / s.sim.hands_played as f64 * 100f64,
         );
 
-        times_printed += 1;
+        hands_played_last_seen = s.sim.hands_played;
+        shoes_played_last_seen = s.sim.shoes_played;
 
+        times_printed += 1;
         if times_printed % 10 == 0 {
-            println!("{}", COMP_CHART.lock().unwrap())
+            println!("{}", COMPARISON_CHART.lock().unwrap())
         }
     }
 }
@@ -84,6 +91,7 @@ fn play_hands_compare_and_report(
             result_accum.sim += sim;
             result_accum.comparison += cmp;
         }
+        result_accum.sim.shoes_played += 1;
     }
     let mut s = status.lock().unwrap();
     *s += result_accum;
