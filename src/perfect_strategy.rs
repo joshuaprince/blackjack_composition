@@ -10,15 +10,28 @@ use crate::types::{*};
 
 mod hashed_hand;
 
-pub fn play(hand: &Hand, num_hands: i32, dealer_up: Rank, deck: &Deck) -> EvCalcResult {
-    ev(HashedPlayerHand::from(hand.clone()), num_hands, dealer_up, *deck)
-}
-
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub struct EvCalcResult {
     pub ev: f64,
     pub action: Action,
+
+    /// The EV of each possible action in a situation. If an action is not allowed, the EV will
+    /// be returned as `f64::NEG_INFINITY`.
     pub choices: EnumMap<Action, f64>,
+}
+
+/// Perform a combinatorial analysis on the current hand and draw pile to calculate the optimal
+/// action and its EV.
+///
+/// # Arguments
+/// * `hand` - The Player's hand that is awaiting an action.
+/// * `num_hands` - The total number of hands that the player has split to at this point. This is
+///                 used to determine how many splits and doubles are allowed with the current
+///                 rule set.
+/// * `dealer_up` - The card that the dealer is showing.
+/// * `deck` - The remaining draw pile, as currently known at the time the action is taken.
+pub fn perfect_play(hand: &Hand, num_hands: i32, dealer_up: Rank, deck: &Deck) -> EvCalcResult {
+    ev(HashedPlayerHand::from(hand.clone()), num_hands, dealer_up, *deck)
 }
 
 #[memoize(Capacity: 100_000)]

@@ -28,9 +28,9 @@ pub enum PlayerDecisionMethod<'a> {
 ///
 /// # Arguments
 /// * `deck` - State of the deck before the hand started. The deck will be mutated as some cards are
-/// played during the hand.
+///            played during the hand.
 /// * `player_decision` - Function that will be called upon whenever there is a player decision to
-/// make.
+///                       make.
 pub fn play_hand(
     deck: &mut Deck,
     player_decision: PlayerDecisionMethod,
@@ -63,7 +63,7 @@ pub fn play_hand(
                     chart.basic_play(&player_hands[hand_idx], dealer_hand[0], player_hands.len() as i32)
                 },
                 PlayerDecisionMethod::PerfectStrategy => {
-                    perfect_strategy::play(&player_hands[hand_idx], player_hands.len() as i32, dealer_hand[0], deck).action
+                    perfect_strategy::perfect_play(&player_hands[hand_idx], player_hands.len() as i32, dealer_hand[0], deck).action
                 },
                 PlayerDecisionMethod::BasicPerfectComparison(bs_chart) => {
                     let (action, comp) = strategy_comparison::decide(
@@ -144,10 +144,6 @@ pub fn play_hand(
         }
     }
 
-    // if verbose {
-    //     print_game_results(&dealer_hand, &player_hands, result.roi, Some(deck))
-    // }
-    //
     (result, comparison)
 }
 
@@ -163,15 +159,4 @@ fn draw(deck: &mut Deck) -> Rank {
     let card = random_card(*deck);
     deck[card as usize] -= 1;
     card
-}
-
-fn print_game_results(dealer_hand: &Hand, player_hands: &Vec<Hand>, win_loss: f64, deck: Option<&Deck>) {
-    println!("Dealer  {:>2} {:?}", dealer_hand.total(), dealer_hand);
-    for hand in player_hands {
-        println!(" Player {:>2} {:?}", hand.total(), hand);
-    }
-    println!(" Result {:+}", win_loss);
-    if let Some(d) = deck {
-        println!(" Deck: {:?}", d);
-    }
 }

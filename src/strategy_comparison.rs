@@ -18,19 +18,19 @@ pub struct BasicPerfectComparison {
 pub fn decide(basic_chart: &BasicStrategyChart, hand: &Hand, dealer_up: Rank,
               num_hands: i32, deck: &Deck) -> (Action, BasicPerfectComparison) {
     let bs_decision = basic_chart.basic_play(hand, dealer_up, num_hands);
-    let cs_calc = perfect_strategy::play(hand, num_hands, dealer_up, deck);
-    let cs_decision = cs_calc.action;
+    let ps_calc = perfect_strategy::perfect_play(hand, num_hands, dealer_up, deck);
+    let ps_decision = ps_calc.action;
 
     let mut cmp_stats = BasicPerfectComparison::default();
 
-    let deviated = if bs_decision != cs_decision {
+    let deviated = if bs_decision != ps_decision {
         cmp_stats.deviations += 1;
-        let gained_ev = cs_calc.choices[cs_decision] - cs_calc.choices[bs_decision];
+        let gained_ev = ps_calc.choices[ps_decision] - ps_calc.choices[bs_decision];
         cmp_stats.gained_ev += gained_ev;
         if gained_ev > 0.35 {
-            println!("Deviated from basic strategy! BS={:?}, CS={:?} ({} vs {})",
-                     bs_decision, cs_decision, cs_calc.choices[bs_decision],
-                     cs_calc.choices[cs_decision]);
+            println!("Deviated from basic strategy! BS={:?}, PS={:?} ({} vs {})",
+                     bs_decision, ps_decision, ps_calc.choices[bs_decision],
+                     ps_calc.choices[ps_decision]);
             if gained_ev > 1.0 {
                 println!("&&&&&&&& CRITICAL DEVIATION: {:+} &&&&&&&&", gained_ev);
             } else if gained_ev > 0.6 {
@@ -47,11 +47,11 @@ pub fn decide(basic_chart: &BasicStrategyChart, hand: &Hand, dealer_up: Rank,
 
     COMP_CHART.lock().unwrap().see(hand, dealer_up, num_hands, deviated);
 
-    if cs_calc.choices[bs_decision] == f64::NEG_INFINITY {
+    if ps_calc.choices[bs_decision] == f64::NEG_INFINITY {
         panic!("I made an illegal move.");
     }
 
-    (cs_decision, cmp_stats)
+    (ps_decision, cmp_stats)
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Hash)]

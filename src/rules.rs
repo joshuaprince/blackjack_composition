@@ -18,7 +18,7 @@ pub struct BlackjackRules {
 
 pub const RULES_1D_H17_NDAS_D10: BlackjackRules = BlackjackRules {
     decks: 1,
-    shuffle_at_cards: 52 / 2,
+    shuffle_at_cards: 51,
     blackjack_multiplier: 1.5,
     hit_soft_17: true,
     split_hands_limit: 4,
