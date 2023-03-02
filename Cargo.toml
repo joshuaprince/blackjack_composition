@@ -9,5 +9,5 @@ edition = "2021"
 csv = "1.1.6"
 derive_more = "0.99.17"
 enum-map = "2.4.2"
-memoize = { version = "0.3.3", features = ["full"] }
+memoize = { version = "0.4.0", features = ["full"] }
 rand = "0.8.5"

@@ -35,7 +35,7 @@ pub fn perfect_play(hand: &Hand, num_hands: u32, dealer_up: Rank, deck: &Deck) -
     ev(HashedPlayerHand::from(hand.clone()), num_hands, dealer_up, *deck)
 }
 
-#[memoize(Capacity: 100_000)]
+#[memoize(Capacity: 1_000_000)]
 fn ev(player_hand: HashedPlayerHand, num_hands: u32, upcard: Rank, deck: Deck) -> EvCalcResult {
     let mut choices = EnumMap::from_array([f64::NEG_INFINITY; 4]);
 
@@ -169,7 +169,7 @@ fn p_next_card_is_each(deck: &Deck, can_be_ten: bool, can_be_ace: bool) -> RankA
 
 /// Probability dealer beats this score / pushes with this score.
 /// Note: Assumes that the dealer already checked for Blackjack!
-#[memoize(Capacity: 100_000)]
+#[memoize(Capacity: 10_000)]
 fn dealer_probabilities_beating(player_hand_to_beat: u32, dealer_hand: HashedDealerHand, deck: Deck) -> (f64, f64) {
     // Base cases - the dealer is finished playing.
     if dealer_hand.total >= 18 || (dealer_hand.total >= 17 && (!RULES.hit_soft_17 || !dealer_hand.is_soft)) {
