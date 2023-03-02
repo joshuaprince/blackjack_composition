@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
-use crate::bj_helper::{CardHand, Hand, PlayerHand};
+use crate::hand::{Hand};
 use crate::rules::BlackjackRules;
 use crate::types::*;
 
@@ -86,8 +86,8 @@ impl BasicStrategyChart {
     }
 
     /// Determine the play as dictated by this Basic Strategy chart.
-    pub fn basic_play(&self, hand: &CardHand, dealer_up: Rank, num_hands: i32) -> Action {
-        let can_double = hand.is_two()
+    pub fn basic_play(&self, hand: &Hand, dealer_up: Rank, num_hands: i32) -> Action {
+        let can_double = hand.cards.len() == 2
             && (self.rules.double_after_split || num_hands == 1)
             && (self.rules.double_any_hands ||
                 (hand.total() >= self.rules.double_hard_hands_thru_11 && hand.total() <= 11));
@@ -271,7 +271,7 @@ fn to_letters(actions: (Action, Option<Action>)) -> &'static str {
 #[cfg(test)]
 mod tests {
     use crate::basic_strategy::{Action, BasicStrategyChart};
-    use crate::bj_helper::CardHand;
+    use crate::hand::Hand;
     use crate::hand;
     use crate::rules::RULES_6D_H17_DAS_DANY;
     use crate::types::{A, T};

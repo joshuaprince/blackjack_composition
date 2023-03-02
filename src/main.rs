@@ -9,7 +9,7 @@ use crate::simulation::{play_hand, PlayerDecisionMethod, SimulationResult};
 use crate::strategy_comparison::{BasicPerfectComparison, COMP_CHART};
 
 mod basic_strategy;
-mod bj_helper;
+mod hand;
 mod perfect_strategy;
 mod rules;
 mod simulation;

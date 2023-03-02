@@ -3,21 +3,12 @@ use std::ops::Index;
 
 use crate::types::{A, Rank, T};
 
+/// A Hand containing cards belonging to a Player or Dealer.
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub struct CardHand {
+pub struct Hand {
+    /// All cards in this Hand.
     pub cards: Vec<Rank>,
 }
-
-pub trait Hand {
-    fn total(&self) -> i32;
-    fn is_soft(&self) -> bool;
-}
-
-pub trait PlayerHand {
-    fn is_two(&self) -> bool;
-    fn is_pair(&self) -> Option<Rank>;
-}
-
 
 #[macro_export]
 macro_rules! hand {
@@ -27,31 +18,27 @@ macro_rules! hand {
             $(
                 temp_vec.push($x);
             )*
-            CardHand { cards: temp_vec }
+            Hand { cards: temp_vec }
         }
     };
 }
 
-impl Hand for CardHand {
-    /// Sum total of a hand, taking soft hands into account but not accounting for Blackjack bonuses or
-    /// or busts.
-    fn total(&self) -> i32 {
+impl Hand {
+    /// Sum total of this hand, returning the "high" total for soft hands but not accounting for
+    /// Blackjack bonuses or busts.
+    pub fn total(&self) -> i32 {
         self._total_internal().0
     }
 
-    fn is_soft(&self) -> bool {
+    /// Checks whether the hand is soft.
+    pub fn is_soft(&self) -> bool {
         self._total_internal().1
     }
-}
 
-impl PlayerHand for CardHand {
-    /// Does NOT check for double after split
-    fn is_two(&self) -> bool {
-        self.cards.len() == 2
-    }
-
-    /// Does NOT check for upper split limits
-    fn is_pair(&self) -> Option<Rank> {
+    /// Checks whether this hand is a pair of exactly two equal-valued cards. This does NOT check
+    /// whether a split should be allowed, only whether the hand is of length 2 and the ranks are
+    /// of equal value.
+    pub fn is_pair(&self) -> Option<Rank> {
         if self.cards.len() == 2 && self.cards[0] == self.cards[1] {
             Some(self.cards[0])
         } else {
@@ -59,12 +46,6 @@ impl PlayerHand for CardHand {
         }
     }
 
-    // pub fn len(&self) -> usize {
-    //     self.cards.len()
-    // }
-}
-
-impl CardHand {
     fn _total_internal(&self) -> (i32, bool) {
         let mut contains_ace = false;
         let mut total = 0;
@@ -84,7 +65,7 @@ impl CardHand {
     }
 }
 
-impl Index<usize> for CardHand {
+impl Index<usize> for Hand {
     type Output = Rank;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -92,17 +73,17 @@ impl Index<usize> for CardHand {
     }
 }
 
-impl ops::Add<Rank> for CardHand {
-    type Output = CardHand;
+impl ops::Add<Rank> for Hand {
+    type Output = Hand;
 
     fn add(self, rhs: Rank) -> Self::Output {
         let mut copy = self.cards.clone();
         copy.push(rhs);
-        CardHand { cards: copy }
+        Hand { cards: copy }
     }
 }
 
-impl ops::AddAssign<Rank> for CardHand {
+impl ops::AddAssign<Rank> for Hand {
     fn add_assign(&mut self, rhs: Rank) {
         self.cards.push(rhs);
     }

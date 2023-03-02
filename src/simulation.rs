@@ -5,7 +5,7 @@ use rand::distributions::{Distribution, WeightedIndex};
 
 use crate::{hand, perfect_strategy, RULES, strategy_comparison};
 use crate::basic_strategy::BasicStrategyChart;
-use crate::bj_helper::*;
+use crate::hand::*;
 use crate::strategy_comparison::BasicPerfectComparison;
 use crate::types::*;
 
@@ -36,7 +36,7 @@ pub fn play_hand(
     player_decision: PlayerDecisionMethod,
 ) -> (SimulationResult, BasicPerfectComparison) {
     let mut dealer_hand = hand![draw(deck), draw(deck)];
-    let mut player_hands: Vec<CardHand> = vec![hand![draw(deck), draw(deck)]];
+    let mut player_hands: Vec<Hand> = vec![hand![draw(deck), draw(deck)]];
     let mut bet_units: Vec<f64> = vec![1.0];
 
     let mut result = SimulationResult::default();
@@ -165,7 +165,7 @@ fn draw(deck: &mut Deck) -> Rank {
     card
 }
 
-fn print_game_results(dealer_hand: &CardHand, player_hands: &Vec<CardHand>, win_loss: f64, deck: Option<&Deck>) {
+fn print_game_results(dealer_hand: &Hand, player_hands: &Vec<Hand>, win_loss: f64, deck: Option<&Deck>) {
     println!("Dealer  {:>2} {:?}", dealer_hand.total(), dealer_hand);
     for hand in player_hands {
         println!(" Player {:>2} {:?}", hand.total(), hand);

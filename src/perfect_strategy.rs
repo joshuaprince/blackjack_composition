@@ -3,14 +3,14 @@ use std::cmp::Ordering;
 use enum_map::EnumMap;
 use memoize::memoize;
 
-use crate::bj_helper::{CardHand, Hand, PlayerHand};
+use crate::hand::{Hand};
 use crate::perfect_strategy::hashed_hand::{HashedDealerHand, HashedPlayerHand};
 use crate::RULES;
 use crate::types::{*};
 
 mod hashed_hand;
 
-pub fn play(hand: &CardHand, num_hands: i32, dealer_up: Rank, deck: &Deck) -> EvCalcResult {
+pub fn play(hand: &Hand, num_hands: i32, dealer_up: Rank, deck: &Deck) -> EvCalcResult {
     ev(HashedPlayerHand::from(hand.clone()), num_hands, dealer_up, *deck)
 }
 
@@ -25,7 +25,7 @@ pub struct EvCalcResult {
 fn ev(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: Deck) -> EvCalcResult {
     let mut choices = EnumMap::from_array([f64::NEG_INFINITY; 4]);
 
-    if player_hand.total() > 21 {
+    if player_hand.total > 21 {
         choices[Action::Stand] = -1f64;
         return EvCalcResult { ev: -1f64, action: Action::Stand, choices };
     }
@@ -51,12 +51,12 @@ fn ev(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: Deck) -
 }
 
 fn ev_stand(player_hand: HashedPlayerHand, upcard: Rank, deck: &Deck) -> f64 {
-    if player_hand.total() > 21 {
+    if player_hand.total > 21 {
         return -1f64;
     }
 
     let (p_dealer_win, p_push) = dealer_probabilities_beating(
-        player_hand.total(), HashedDealerHand::single(upcard), *deck
+        player_hand.total, HashedDealerHand::from_single_card(upcard), *deck
     );
     let p_player_win: f64 = 1f64 - p_dealer_win - p_push;
 
@@ -65,7 +65,7 @@ fn ev_stand(player_hand: HashedPlayerHand, upcard: Rank, deck: &Deck) -> f64 {
 
 fn ev_hit(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: &Deck, can_act_again: bool) -> f64 {
     // Base case - the player busted.
-    if player_hand.total() > 21 {
+    if player_hand.total > 21 {
         return -1f64 as f64;
     }
 
@@ -96,10 +96,10 @@ fn ev_double(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: 
 }
 
 fn ev_split(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: &Deck) -> f64 {
-    // This function returns the total EV of both split hands.
+    // This function returns the total EV of both split hands added together.
 
-    let split_card = player_hand.is_pair().unwrap();
-    let can_act_after = RULES.hit_split_aces || (player_hand.is_pair() != Some(A));
+    let split_card = player_hand.is_pair.unwrap();
+    let can_act_after = RULES.hit_split_aces || (player_hand.is_pair != Some(A));
 
     // Recursive case - what can happen with the new second card?
     let p_next_card_is = p_next_card_is_each(&deck, true, true);
@@ -113,10 +113,10 @@ fn ev_split(player_hand: HashedPlayerHand, num_hands: i32, upcard: Rank, deck: &
         deck_after_this_card[next_card as usize] -= 1;
 
         if can_act_after {
-            let ev_with = ev(HashedPlayerHand::from_two(split_card, next_card), num_hands + 1, upcard, deck_after_this_card).ev;
+            let ev_with = ev(HashedPlayerHand::from_two_cards(split_card, next_card), num_hands + 1, upcard, deck_after_this_card).ev;
             cumul_ev += ev_with * p_next_card_is[next_card as usize];
         } else {
-            let ev_standing = ev_stand(HashedPlayerHand::from_two(split_card, next_card), upcard, &deck_after_this_card);
+            let ev_standing = ev_stand(HashedPlayerHand::from_two_cards(split_card, next_card), upcard, &deck_after_this_card);
             cumul_ev += ev_standing * p_next_card_is[next_card as usize];
         }
     }
@@ -162,13 +162,13 @@ fn p_next_card_is_each(deck: &Deck, can_be_ten: bool, can_be_ace: bool) -> [f64;
 #[memoize(Capacity: 100_000)]
 fn dealer_probabilities_beating(player_hand_to_beat: i32, dealer_hand: HashedDealerHand, deck: Deck) -> (f64, f64) {
     // Base cases - the dealer is finished playing.
-    if dealer_hand.total() >= 18 || (dealer_hand.total() >= 17 && (!RULES.hit_soft_17 || !dealer_hand.is_soft())) {
+    if dealer_hand.total >= 18 || (dealer_hand.total >= 17 && (!RULES.hit_soft_17 || !dealer_hand.is_soft)) {
         if player_hand_to_beat > 21 {
             return (1f64, 0f64);
-        } else if dealer_hand.total() > 21 {
+        } else if dealer_hand.total > 21 {
             return (0f64, 0f64);
         }
-        return match dealer_hand.total().cmp(&player_hand_to_beat) {
+        return match dealer_hand.total.cmp(&player_hand_to_beat) {
             Ordering::Greater => (1f64, 0f64),
             Ordering::Equal => (0f64, 1f64),
             Ordering::Less => (0f64, 0f64),
@@ -177,8 +177,8 @@ fn dealer_probabilities_beating(player_hand_to_beat: i32, dealer_hand: HashedDea
 
     // Recursive cases - the dealer still has to pick one or more cards.
     // Dealer already checked for Blackjack.
-    let next_can_be_ten = !(dealer_hand.is_one() && dealer_hand.total() == 11);
-    let next_can_be_ace = !(dealer_hand.is_one() && dealer_hand.total() == 10);
+    let next_can_be_ten = !(dealer_hand.is_one && dealer_hand.total == 11);
+    let next_can_be_ace = !(dealer_hand.is_one && dealer_hand.total == 10);
     let p_next_card_is = p_next_card_is_each(&deck, next_can_be_ten, next_can_be_ace);
     let mut cumul_prob_dealer_win = 0f64;
     let mut cumul_prob_push = 0f64;
@@ -201,7 +201,7 @@ fn dealer_probabilities_beating(player_hand_to_beat: i32, dealer_hand: HashedDea
 }
 
 fn can_double(player_hand: &HashedPlayerHand, num_hands: i32) -> bool {
-    if !player_hand.is_two() {
+    if !player_hand.is_two {
         return false;
     }
 
@@ -213,7 +213,7 @@ fn can_double(player_hand: &HashedPlayerHand, num_hands: i32) -> bool {
         return true;
     }
 
-    let total = player_hand.total();
+    let total = player_hand.total;
     if total >= RULES.double_hard_hands_thru_11 && total <= 11 {
         return true;
     }
@@ -222,7 +222,7 @@ fn can_double(player_hand: &HashedPlayerHand, num_hands: i32) -> bool {
 }
 
 fn can_split(player_hand: &HashedPlayerHand, num_hands: i32) -> bool {
-    let max_hands_allowed = match player_hand.is_pair() {
+    let max_hands_allowed = match player_hand.is_pair {
         Some(A) => RULES.split_aces_limit,
         Some(_) => RULES.split_hands_limit,
         None => 1,
@@ -245,7 +245,7 @@ mod tests {
         let upcard = A;
         // deck[upcard as usize] -= 1;
 
-        let (dealer_win, push) = dealer_probabilities_beating(16, HashedDealerHand::single(upcard), deck);
+        let (dealer_win, push) = dealer_probabilities_beating(16, HashedDealerHand::from_single_card(upcard), deck);
         println!("Player Win: {}\nPush: {}\nDealer Win: {}", 1f64 - push - dealer_win, push, dealer_win);
     }
 
