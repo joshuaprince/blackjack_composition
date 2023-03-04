@@ -16,6 +16,7 @@ mod hand;
 mod perfect_strategy;
 mod rules;
 mod simulation;
+mod statistics;
 mod strategy_comparison;
 mod types;
 
@@ -31,7 +32,7 @@ struct ComparisonResult {
 }
 
 fn main() {
-    let bs_chart = BasicStrategyChart::new(&RULES).unwrap();
+    let bs_chart = BasicStrategyChart::builtin(&RULES).unwrap();
 
     let status = Arc::new(Mutex::new(ComparisonResult::default()));
     let mut thread_handles = vec![];

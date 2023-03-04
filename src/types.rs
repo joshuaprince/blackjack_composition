@@ -39,10 +39,3 @@ pub enum Action {
     Double,
     Split,
 }
-
-#[derive(PartialEq, Eq, Clone, Copy, Hash)]
-pub enum HandType {
-    Hard,
-    Soft,
-    Pair,
-}

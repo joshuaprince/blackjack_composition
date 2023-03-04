@@ -6,10 +6,10 @@ use derive_more::{Add, AddAssign};
 use memoize::lazy_static::lazy_static;
 
 use crate::{perfect_strategy, RULES};
-use crate::basic_strategy::{BasicStrategyChart, int_to_rank_str};
+use crate::basic_strategy::{BasicStrategyChart, BasicStrategyChartKey, BasicStrategyHand, int_to_rank_str};
 use crate::deck::Deck;
 use crate::hand::Hand;
-use crate::types::{A, Action, HandType, Rank, RANKS};
+use crate::types::{A, Action, Rank, RANKS};
 
 #[derive(Default, Add, AddAssign)]
 pub struct BasicPerfectComparison {
@@ -19,7 +19,7 @@ pub struct BasicPerfectComparison {
 
 pub fn decide(basic_chart: &BasicStrategyChart, hand: &Hand, dealer_up: Rank,
               num_hands: u32, deck: &Deck) -> (Action, BasicPerfectComparison) {
-    let bs_decision = basic_chart.basic_play(hand, dealer_up, num_hands);
+    let bs_decision = basic_chart.context_basic_play(hand, dealer_up, num_hands);
     let ps_calc = perfect_strategy::perfect_play(hand, num_hands, dealer_up, deck);
     let ps_decision = ps_calc.action;
 
@@ -49,13 +49,6 @@ pub fn decide(basic_chart: &BasicStrategyChart, hand: &Hand, dealer_up: Rank,
     (ps_decision, cmp_stats)
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Hash)]
-struct ChartKey {
-    hand_type: HandType,
-    hand_number: u32,  // total for hard and soft hands, the paired card for pair hands
-    upcard: Rank,
-}
-
 #[derive(PartialEq, Eq, Clone, Copy, Default)]
 struct ChartValue {
     times_seen: u32,
@@ -63,7 +56,7 @@ struct ChartValue {
 }
 
 pub struct ComparisonBSChart {
-    chart: HashMap<ChartKey, ChartValue>,
+    chart: HashMap<BasicStrategyChartKey, ChartValue>,
 }
 
 impl Default for ComparisonBSChart {
@@ -71,15 +64,15 @@ impl Default for ComparisonBSChart {
         let mut chart = HashMap::with_capacity(10 * 36);
         for dealer_up in RANKS {
             for hard in 4..=21 {
-                let k = ChartKey { hand_type: HandType::Hard, hand_number: hard, upcard: dealer_up };
+                let k = BasicStrategyChartKey { hand: BasicStrategyHand::Hard(hard), upcard: dealer_up };
                 chart.insert(k, ChartValue::default());
             }
             for soft in 12..=21 {
-                let k = ChartKey { hand_type: HandType::Soft, hand_number: soft, upcard: dealer_up };
+                let k = BasicStrategyChartKey { hand: BasicStrategyHand::Soft(soft), upcard: dealer_up };
                 chart.insert(k, ChartValue::default());
             }
             for paired in RANKS {
-                let k = ChartKey { hand_type: HandType::Pair, hand_number: paired, upcard: dealer_up };
+                let k = BasicStrategyChartKey { hand: BasicStrategyHand::Pair(paired), upcard: dealer_up };
                 chart.insert(k, ChartValue::default());
             }
         }
@@ -100,22 +93,11 @@ impl ComparisonBSChart {
             None => 1,
         };
 
-        let key = ChartKey {
-            hand_type: {
-                if is_splittable_pair {
-                    HandType::Pair
-                } else if hand.is_soft() {
-                    HandType::Soft
-                } else {
-                    HandType::Hard
-                }
-            },
-            hand_number: {
-                if is_splittable_pair {
-                    hand[0]
-                } else {
-                    hand.total()
-                }
+        let key = BasicStrategyChartKey {
+            hand: if is_splittable_pair {
+                BasicStrategyHand::from(hand)
+            } else {
+                BasicStrategyHand::from_unsplittable(hand)
             },
             upcard: dealer_up,
         };
@@ -141,9 +123,8 @@ impl Display for ComparisonBSChart {
         for hard_total in 4..=21 {
             write!(f, "{:<4}", hard_total)?;
             for &upcard in &header_ranks {
-                let key = ChartKey {
-                    hand_type: HandType::Hard,
-                    hand_number: hard_total,
+                let key = BasicStrategyChartKey {
+                    hand: BasicStrategyHand::Hard(hard_total),
                     upcard,
                 };
                 let v = self.chart.get(&key).unwrap();
@@ -160,9 +141,8 @@ impl Display for ComparisonBSChart {
         for soft_total in 12..=21 {
             write!(f, "{:<4}", soft_total)?;
             for &upcard in &header_ranks {
-                let key = ChartKey {
-                    hand_type: HandType::Soft,
-                    hand_number: soft_total,
+                let key = BasicStrategyChartKey {
+                    hand: BasicStrategyHand::Soft(soft_total),
                     upcard,
                 };
                 let v = self.chart.get(&key).unwrap();
@@ -179,9 +159,8 @@ impl Display for ComparisonBSChart {
         for paired_card in vec![2, 3, 4, 5, 6, 7, 8, 9, 0, 1] {
             write!(f, "{:<4}", int_to_rank_str(paired_card))?;
             for &upcard in &header_ranks {
-                let key = ChartKey {
-                    hand_type: HandType::Pair,
-                    hand_number: paired_card,
+                let key = BasicStrategyChartKey {
+                    hand: BasicStrategyHand::Pair(paired_card),
                     upcard,
                 };
                 let v = self.chart.get(&key).unwrap();

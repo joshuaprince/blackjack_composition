@@ -68,7 +68,7 @@ pub fn play_hand(
 
             let decision = match player_decision_method {
                 PlayerDecisionMethod::BasicStrategy(chart) => {
-                    chart.basic_play(current_hand, dealer_up, num_hands)
+                    chart.context_basic_play(current_hand, dealer_up, num_hands)
                 },
                 PlayerDecisionMethod::PerfectStrategy => {
                     perfect_strategy::perfect_play(current_hand, num_hands, dealer_up, &deck_plus_down_card).action
