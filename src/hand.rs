@@ -3,6 +3,9 @@ use std::ops::Index;
 
 use crate::types::{A, Rank, T};
 
+pub mod composition_hashed;
+pub mod total_hashed;
+
 /// A Hand containing cards belonging to a Player or Dealer.
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Hand {

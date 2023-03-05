@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use derive_more::{Add, AddAssign};
 
-use crate::{hand, perfect_strategy, RULES, strategy_comparison};
+use crate::{composition_strategy, hand, perfect_strategy, RULES, strategy_comparison};
 use crate::basic_strategy::BasicStrategyChart;
 use crate::deck::Deck;
 use crate::hand::*;
@@ -20,6 +20,7 @@ pub struct SimulationResult {
 
 pub enum PlayerDecisionMethod<'a> {
     BasicStrategy(&'a BasicStrategyChart),
+    CompositionStrategy,
     PerfectStrategy,
     BasicPerfectComparison(&'a BasicStrategyChart),
 }
@@ -69,6 +70,9 @@ pub fn play_hand(
             let decision = match player_decision_method {
                 PlayerDecisionMethod::BasicStrategy(chart) => {
                     chart.context_basic_play(current_hand, dealer_up, num_hands)
+                },
+                PlayerDecisionMethod::CompositionStrategy => {
+                    composition_strategy::hand_composition_play(current_hand, num_hands, dealer_up, RULES.decks)
                 },
                 PlayerDecisionMethod::PerfectStrategy => {
                     perfect_strategy::perfect_play(current_hand, num_hands, dealer_up, &deck_plus_down_card).action

@@ -1,17 +1,17 @@
 use std::ops;
 
-use crate::hand::Hand;
 use crate::hand;
+use crate::hand::Hand;
 use crate::types::{A, Rank, T};
 
-/// A Hashed Player Hand is the composition-independent representation of a Player's hand.
+/// A Total-Hashed Player Hand is the composition-independent representation of a Player's hand.
 /// Only hands of two or more cards may be represented with this hash.
 ///
-/// The state stored in a hashed hand is descriptive enough to evaluate all possible strategy
+/// The state stored in this hashed hand is descriptive enough to evaluate all possible strategy
 /// decisions, but coarse enough that two hands which are effectively equivalent will have an
 /// equivalent hashed hand. This is used to cache decisions for performance.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
-pub struct HashedPlayerHand {
+pub struct TotalHashedPlayerHand {
     /// Sum total of this hand, returning the "high" total for soft hands but not accounting for
     /// Blackjack bonuses or busts.
     pub total: u32,
@@ -28,14 +28,14 @@ pub struct HashedPlayerHand {
     pub is_pair: Option<Rank>,
 }
 
-/// A Hashed Dealer Hand is the composition-independent representation of a Dealer's hand that has
-/// already been checked for Blackjack.
+/// A Total-Hashed Dealer Hand is the composition-independent representation of a Dealer's hand that
+/// has already been checked for Blackjack.
 ///
-/// The state stored in a hashed hand is descriptive enough to evaluate all possible dealer
+/// The state stored in this hashed hand is descriptive enough to evaluate all possible dealer
 /// outcomes, but coarse enough that two hands which are effectively equivalent will have an
 /// equivalent hashed hand. This is used to cache outcomes for performance.
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
-pub struct HashedDealerHand {
+pub struct TotalHashedDealerHand {
     /// Sum total of this hand, returning the "high" total for soft hands but not accounting for
     /// Blackjack bonuses or busts.
     pub total: u32,
@@ -49,10 +49,10 @@ pub struct HashedDealerHand {
     pub is_one: bool,
 }
 
-impl HashedPlayerHand {
+impl TotalHashedPlayerHand {
     /// Hash a Player Hand from two known card ranks.
     pub fn from_two_cards(a: Rank, b: Rank) -> Self {
-        let mut new_hand = HashedPlayerHand::from(hand![a, b]);
+        let mut new_hand = TotalHashedPlayerHand::from(hand![a, b]);
         new_hand.is_soft = a == A || b == A;
         new_hand.is_two = true;
         new_hand.is_pair = if a == b {
@@ -65,7 +65,7 @@ impl HashedPlayerHand {
     }
 }
 
-impl HashedDealerHand {
+impl TotalHashedDealerHand {
     /// Hash a Dealer Hand that contains a single known card.
     pub fn from_single_card(rank: Rank) -> Self {
         Self {
@@ -80,9 +80,9 @@ impl HashedDealerHand {
     }
 }
 
-impl From<Hand> for HashedPlayerHand {
+impl From<Hand> for TotalHashedPlayerHand {
     fn from(value: Hand) -> Self {
-        HashedPlayerHand {
+        TotalHashedPlayerHand {
             total: value.total(),
             is_soft: value.is_soft(),
             is_two: value.cards.len() == 2,
@@ -91,8 +91,8 @@ impl From<Hand> for HashedPlayerHand {
     }
 }
 
-impl ops::Add<Rank> for HashedPlayerHand {
-    type Output = HashedPlayerHand;
+impl ops::Add<Rank> for TotalHashedPlayerHand {
+    type Output = TotalHashedPlayerHand;
 
     fn add(self, rhs: Rank) -> Self::Output {
         let mut new_hand = self.clone();
@@ -119,8 +119,8 @@ impl ops::Add<Rank> for HashedPlayerHand {
     }
 }
 
-impl ops::Add<Rank> for HashedDealerHand {
-    type Output = HashedDealerHand;
+impl ops::Add<Rank> for TotalHashedDealerHand {
+    type Output = TotalHashedDealerHand;
 
     fn add(self, rhs: Rank) -> Self::Output {
         let mut new_hand = self.clone();

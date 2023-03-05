@@ -11,6 +11,7 @@ use crate::simulation::{play_hand, PlayerDecisionMethod, SimulationResult};
 use crate::strategy_comparison::{BasicPerfectComparison, COMPARISON_CHART};
 
 mod basic_strategy;
+mod composition_strategy;
 mod deck;
 mod hand;
 mod perfect_strategy;
