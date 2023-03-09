@@ -14,7 +14,8 @@ use crate::types::{A, Action, Rank, RANKS};
 #[derive(Default, Add, AddAssign)]
 pub struct BasicPerfectComparison {
     pub deviations: u64,
-    pub gained_ev: f64,
+    pub gained_ev_deviations: f64,
+    pub gained_ev_insurance: f64,
 }
 
 pub fn decide(basic_chart: &BasicStrategyChart, hand: &Hand, dealer_up: Rank,
@@ -28,7 +29,7 @@ pub fn decide(basic_chart: &BasicStrategyChart, hand: &Hand, dealer_up: Rank,
     let deviated = if bs_decision != ps_decision {
         cmp_stats.deviations += 1;
         let gained_ev = ps_calc.choices[ps_decision] - ps_calc.choices[bs_decision];
-        cmp_stats.gained_ev += gained_ev;
+        cmp_stats.gained_ev_deviations += gained_ev;
         if gained_ev > 1.0 {
             println!("Huge deviation from basic strategy! BS={:?}, PS={:?} ({} vs {} = +{} EV)",
                      bs_decision, ps_decision, ps_calc.choices[bs_decision],

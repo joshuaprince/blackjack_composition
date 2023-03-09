@@ -14,6 +14,10 @@ pub struct SimulationResult {
     pub shoes_played: u64,
     pub hands_played: u64,
     pub decisions_made: u64,
+
+    pub insurances_offered: u64,
+    pub insurances_taken: u64,
+    pub insurances_won: u64,
     /// Return on Investment
     pub roi: f64,
 }
@@ -46,11 +50,41 @@ pub fn play_hand(
 
     let mut comparison = BasicPerfectComparison::default();
 
+    let take_insurance = if dealer_hand[0] == A {
+        let deck_plus_down_card = deck.added(dealer_hand[1]);
+        result.insurances_offered += 1;
+        match player_decision_method {
+            PlayerDecisionMethod::PerfectStrategy => {
+                let (choice, _ev) = perfect_strategy::perfect_insure(&deck_plus_down_card);
+                choice
+            },
+            PlayerDecisionMethod::BasicPerfectComparison(_) => {
+                let (choice, ev) = perfect_strategy::perfect_insure(&deck_plus_down_card);
+                if choice {
+                    comparison.gained_ev_insurance += ev;
+                }
+                choice
+            },
+            _ => false
+        }
+    } else { false };
+
+    // Resolve Insurance bet
+    if take_insurance {
+        result.insurances_taken += 1;
+        if dealer_hand[1] == T {
+            result.insurances_won += 1;
+            result.roi += 1.0;
+        } else {
+            result.roi += -0.5;
+        }
+    }
+
     // Check for dealt Blackjacks
     match (dealer_hand.total(), &player_hands[0].total()) {
-        (21, 21) => { result.roi = 0f64; return (result, comparison); },
-        (21, _) => { result.roi = -1f64; return (result, comparison); },
-        (_, 21) => { result.roi = RULES.blackjack_multiplier; return (result, comparison); },
+        (21, 21) => { result.roi += 0f64; return (result, comparison); },
+        (21, _) => { result.roi += -1f64; return (result, comparison); },
+        (_, 21) => { result.roi += RULES.blackjack_multiplier; return (result, comparison); },
         (_, _) => (),
     }
 

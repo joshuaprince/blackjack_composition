@@ -33,6 +33,23 @@ pub fn perfect_play(hand: &Hand, num_hands: u32, dealer_up: Rank, deck: &Deck) -
     ev(TotalHashedPlayerHand::from(hand.clone()), num_hands, dealer_up, *deck)
 }
 
+/// Analyze the current deck to calculate the EV of taking an insurance bet. This function assumes
+/// that Insurance is currently being offered, i.e. that the Dealer has an Ace up.
+///
+/// Returns a tuple whose first member indicates whether or not insurance is a +EV move, and whose
+/// second member is the positive or negative EV of the choice.
+///
+/// # Arguments
+/// * `deck` - The current deck, INCLUDING the Dealer's unknown down card.
+pub fn perfect_insure(deck: &Deck) -> (bool, f64) {
+    let p_insurance_win = p_next_card_is_each(deck, true, true)[T];
+    let p_insurance_lose = 1.0 - p_insurance_win;
+
+    let ev = 1.0 * p_insurance_win - 0.5 * p_insurance_lose;
+
+    (ev > 0.0, ev)
+}
+
 #[memoize(Capacity: 1_000_000)]
 fn ev(player_hand: TotalHashedPlayerHand, num_hands: u32, upcard: Rank, deck: Deck) -> EvCalcResult {
     let mut choices = EnumMap::from_array([f64::NEG_INFINITY; 4]);

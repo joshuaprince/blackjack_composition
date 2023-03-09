@@ -3,14 +3,14 @@ use std::sync::Mutex;
 use memoize::lazy_static::lazy_static;
 use memoize::memoize;
 
-use crate::RULES;
 use crate::basic_strategy::BasicStrategyChart;
 use crate::deck::Deck;
 use crate::hand::composition_hashed::CompositionHashedHand;
 use crate::hand::Hand;
 use crate::perfect_strategy::perfect_play;
+use crate::RULES;
 use crate::shoe;
-use crate::types::{Action, Rank, T};
+use crate::types::{Action, Rank};
 
 pub fn hand_composition_play(hand: &Hand, num_hands: u32, dealer_up: Rank, num_decks: u32) -> Action {
     composition_play(CompositionHashedHand::from(hand), num_hands, dealer_up, num_decks)
