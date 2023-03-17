@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
+use enum_map::EnumMap;
+
 use crate::hand::Hand;
 use crate::rules::BlackjackRules;
 use crate::types::*;
@@ -144,26 +146,16 @@ impl BasicStrategyChart {
 
     /// Get the optimal play in a given context, taking into account whether Double or Split is
     /// allowed.
-    pub fn context_basic_play(&self, hand: &Hand, dealer_up: Rank, num_hands: u32) -> Action {
-        let can_double = hand.cards.len() == 2
-            && (self.rules.double_after_split || num_hands == 1)
-            && (self.rules.double_any_hands ||
-            (hand.total() >= self.rules.double_hard_hands_thru_11 && hand.total() <= 11));
-        let is_splittable_pair = num_hands < match hand.is_pair() {
-            Some(A) => self.rules.split_aces_limit,
-            Some(_) => self.rules.split_hands_limit,
-            None => 1,
-        };
-
+    pub fn context_basic_play(&self, allowed_actions: EnumMap<Action, bool>, hand: &Hand, dealer_up: Rank) -> Action {
         let action_list = self.basic_plays(hand, dealer_up);
         let first_allowed_action = action_list.iter().filter(|a| match a {
-            Action::Double => { can_double }
-            Action::Split => { is_splittable_pair }
+            Action::Double => { allowed_actions[Action::Double] }
+            Action::Split => { allowed_actions[Action::Split] }
             _ => true
         }).next();
 
         *first_allowed_action.unwrap_or_else(||
-            panic!("Couldn't find an allowed action for the hand: {:?} vs {} ({} hands)", hand, dealer_up, num_hands)
+            panic!("Couldn't find an allowed action for the hand: {:?} vs {} (allowed: {:?})", hand, dealer_up, allowed_actions)
         )
     }
 }

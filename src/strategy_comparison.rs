@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 use std::sync::Mutex;
 
 use derive_more::{Add, AddAssign};
+use enum_map::EnumMap;
 use memoize::lazy_static::lazy_static;
 
 use crate::{perfect_strategy, RULES};
@@ -18,10 +19,16 @@ pub struct BasicPerfectComparison {
     pub gained_ev_insurance: f64,
 }
 
-pub fn decide(basic_chart: &BasicStrategyChart, hand: &Hand, dealer_up: Rank,
-              num_hands: u32, deck: &Deck) -> (Action, BasicPerfectComparison) {
-    let bs_decision = basic_chart.context_basic_play(hand, dealer_up, num_hands);
-    let ps_calc = perfect_strategy::perfect_play(hand, num_hands, dealer_up, deck);
+pub fn decide(
+    basic_chart: &BasicStrategyChart,
+    allowed_actions: EnumMap<Action, bool>,
+    hand: &Hand,
+    splits_allowed: u32,
+    dealer_up: Rank,
+    deck: &Deck
+) -> (Action, BasicPerfectComparison) {
+    let bs_decision = basic_chart.context_basic_play(allowed_actions, hand, dealer_up);
+    let ps_calc = perfect_strategy::perfect_play(allowed_actions, hand, splits_allowed, dealer_up, deck);
     let ps_decision = ps_calc.action;
 
     let mut cmp_stats = BasicPerfectComparison::default();
@@ -35,13 +42,13 @@ pub fn decide(basic_chart: &BasicStrategyChart, hand: &Hand, dealer_up: Rank,
                      bs_decision, ps_decision, ps_calc.choices[bs_decision],
                      ps_calc.choices[ps_decision], gained_ev);
             println!("  Dealer  {:>2} up", dealer_up);
-            println!("  >Player {:>2} {:?} ({} hand(s))", hand.total(), hand, num_hands);
+            println!("  >Player {:>2} {:?} ({} splits allowed)", hand.total(), hand, splits_allowed);
             println!("   Deck: {:?}", deck);
         }
         true
     } else { false };
 
-    COMPARISON_CHART.lock().unwrap().see(hand, dealer_up, num_hands, deviated);
+    COMPARISON_CHART.lock().unwrap().see(hand, dealer_up, allowed_actions[Action::Split], deviated);
 
     if ps_calc.choices[bs_decision] == f64::NEG_INFINITY {
         panic!("I made an illegal move.");
@@ -87,15 +94,9 @@ lazy_static! {
 }
 
 impl ComparisonBSChart {
-    fn see(&mut self, hand: &Hand, dealer_up: Rank, num_hands: u32, deviated: bool) {
-        let is_splittable_pair = num_hands < match hand.is_pair() {
-            Some(A) => RULES.split_aces_limit,
-            Some(_) => RULES.split_hands_limit,
-            None => 1,
-        };
-
+    fn see(&mut self, hand: &Hand, dealer_up: Rank, splittable: bool, deviated: bool) {
         let key = BasicStrategyChartKey {
-            hand: if is_splittable_pair {
+            hand: if splittable {
                 BasicStrategyHand::from(hand)
             } else {
                 BasicStrategyHand::from_unsplittable(hand)

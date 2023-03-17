@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 
 use enum_map::EnumMap;
 use memoize::memoize;
+use strum::EnumCount;
 
 use crate::deck::Deck;
 use crate::hand::Hand;
@@ -29,8 +30,8 @@ pub struct EvCalcResult {
 ///                 rule set.
 /// * `dealer_up` - The card that the dealer is showing.
 /// * `deck` - The remaining draw pile, as currently known at the time the action is taken.
-pub fn perfect_play(hand: &Hand, num_hands: u32, dealer_up: Rank, deck: &Deck) -> EvCalcResult {
-    ev(TotalHashedPlayerHand::from(hand.clone()), num_hands, dealer_up, *deck)
+pub fn perfect_play(allowed_actions: EnumMap<Action, bool>, hand: &Hand, splits_allowed: u32, dealer_up: Rank, deck: &Deck) -> EvCalcResult {
+    ev(allowed_actions, TotalHashedPlayerHand::from(hand.clone()), splits_allowed, dealer_up, *deck)
 }
 
 /// Analyze the current deck to calculate the EV of taking an insurance bet. This function assumes
@@ -51,22 +52,41 @@ pub fn perfect_insure(deck: &Deck) -> (bool, f64) {
 }
 
 #[memoize(Capacity: 1_000_000)]
-fn ev(player_hand: TotalHashedPlayerHand, num_hands: u32, upcard: Rank, deck: Deck) -> EvCalcResult {
-    let mut choices = EnumMap::from_array([f64::NEG_INFINITY; 4]);
+fn ev(
+    allowed_actions: EnumMap<Action, bool>,
+    player_hand: TotalHashedPlayerHand,
+    splits_allowed: u32,
+    upcard: Rank,
+    deck: Deck
+) -> EvCalcResult {
+    // Split not in allowed_actions implies splits_allowed == 0 and vice versa
+    assert!(allowed_actions[Action::Split] ^ (splits_allowed == 0));
+
+    let mut choices = EnumMap::from_array([f64::NEG_INFINITY; Action::COUNT]);
 
     if player_hand.total > 21 {
         choices[Action::Stand] = -1f64;
         return EvCalcResult { ev: -1f64, action: Action::Stand, choices };
     }
 
-    choices[Action::Stand] = ev_stand(player_hand, upcard, &deck);
-    choices[Action::Hit] = ev_hit(player_hand, num_hands, upcard, &deck, true);
+    for (allowed_action, _) in allowed_actions.iter().filter(|(_, &allowed)| allowed) {
+        match allowed_action {
+            Action::Stand => {
+                choices[Action::Stand] = ev_stand(player_hand, upcard, deck);
+            }
 
-    if can_double(&player_hand, num_hands) {
-        choices[Action::Double] = ev_double(player_hand, num_hands, upcard, &deck);
-    }
-    if can_split(&player_hand, num_hands) {
-        choices[Action::Split] = ev_split(player_hand, num_hands, upcard, &deck);
+            Action::Hit => {
+                choices[Action::Hit] = ev_hit(player_hand, upcard, deck, true);
+            }
+
+            Action::Double => {
+                choices[Action::Double] = ev_double(player_hand, upcard, deck);
+            }
+
+            Action::Split => {
+                choices[Action::Split] = ev_split(player_hand, splits_allowed, upcard, deck);
+            }
+        }
     }
 
     // Return the choice that maximizes expected value.
@@ -79,24 +99,29 @@ fn ev(player_hand: TotalHashedPlayerHand, num_hands: u32, upcard: Rank, deck: De
     EvCalcResult { ev: choices[max_ev_choice], action: max_ev_choice, choices }
 }
 
-fn ev_stand(player_hand: TotalHashedPlayerHand, upcard: Rank, deck: &Deck) -> f64 {
+fn ev_stand(player_hand: TotalHashedPlayerHand, upcard: Rank, deck: Deck) -> f64 {
     if player_hand.total > 21 {
         return -1f64;
     }
 
     let (p_dealer_win, p_push) = dealer_probabilities_beating(
-        player_hand.total, TotalHashedDealerHand::from_single_card(upcard), *deck
+        player_hand.total, TotalHashedDealerHand::from_single_card(upcard), deck
     );
     let p_player_win: f64 = 1f64 - p_dealer_win - p_push;
 
     p_player_win - p_dealer_win
 }
 
-fn ev_hit(player_hand: TotalHashedPlayerHand, num_hands: u32, upcard: Rank, deck: &Deck, can_act_again: bool) -> f64 {
+fn ev_hit(player_hand: TotalHashedPlayerHand, upcard: Rank, deck: Deck, can_act_again: bool) -> f64 {
     // Base case - the player busted.
     if player_hand.total > 21 {
         return -1f64;
     }
+
+    // After hitting, only Stand and Hit are allowed
+    let mut actions_allowed_after = EnumMap::default();
+    actions_allowed_after[Action::Stand] = true;
+    actions_allowed_after[Action::Hit] = true;
 
     // Recursive case - what can happen with the next card?
     let p_next_card_is = p_next_card_is_each(&deck, true, true);
@@ -108,41 +133,56 @@ fn ev_hit(player_hand: TotalHashedPlayerHand, num_hands: u32, upcard: Rank, deck
 
         let deck_after_this_card = deck.removed(next_card);
         if can_act_again {
-            cumul_ev += p_next_card_is[next_card] * ev(player_hand + next_card, num_hands, upcard, deck_after_this_card).ev;
+            cumul_ev += p_next_card_is[next_card] * ev(actions_allowed_after, player_hand + next_card, 0, upcard, deck_after_this_card).ev;
         } else {
-            cumul_ev += p_next_card_is[next_card] * ev_stand(player_hand + next_card, upcard, &deck_after_this_card);
+            cumul_ev += p_next_card_is[next_card] * ev_stand(player_hand + next_card, upcard, deck_after_this_card);
         }
     }
 
     cumul_ev
 }
 
-fn ev_double(player_hand: TotalHashedPlayerHand, num_hands: u32, upcard: Rank, deck: &Deck) -> f64 {
+fn ev_double(player_hand: TotalHashedPlayerHand, upcard: Rank, deck: Deck) -> f64 {
     // Not recursive - only 1 card left.
-    2f64 * ev_hit(player_hand, num_hands, upcard, deck, false)
+    2f64 * ev_hit(player_hand, upcard, deck, false)
 }
 
-fn ev_split(player_hand: TotalHashedPlayerHand, num_hands: u32, upcard: Rank, deck: &Deck) -> f64 {
+fn ev_split(player_hand: TotalHashedPlayerHand, splits_allowed: u32, upcard: Rank, deck: Deck) -> f64 {
     // This function returns the total EV of both split hands added together.
 
+    assert!(splits_allowed > 0);
+
     let split_card = player_hand.is_pair.unwrap();
+
     let can_act_after = RULES.hit_split_aces || (player_hand.is_pair != Some(A));
+    let mut actions_allowed_after = EnumMap::default();
+    actions_allowed_after[Action::Stand] = true;
+    actions_allowed_after[Action::Hit] = can_act_after;
 
     // Recursive case - what can happen with the new second card?
     let p_next_card_is = p_next_card_is_each(&deck, true, true);
     let mut cumul_ev = 0f64;
-    for next_card in RANKS {
-        if p_next_card_is[next_card] <= 0f64 {
+    for new_second_card in RANKS {
+        if p_next_card_is[new_second_card] <= 0f64 {
             continue;
         }
 
-        let deck_after_this_card = deck.removed(next_card);
+        actions_allowed_after[Action::Split] = splits_allowed > 1 && new_second_card == split_card;
+        let splits_allowed_after = if actions_allowed_after[Action::Split] { splits_allowed - 1 } else { 0 };
+
+        let deck_after_this_card = deck.removed(new_second_card);
         if can_act_after {
-            let ev_with = ev(TotalHashedPlayerHand::from_two_cards(split_card, next_card), num_hands + 1, upcard, deck_after_this_card).ev;
-            cumul_ev += ev_with * p_next_card_is[next_card];
+            let ev_with = ev(
+                actions_allowed_after,
+                TotalHashedPlayerHand::from_two_cards(split_card, new_second_card),
+                splits_allowed_after,
+                upcard,
+                deck_after_this_card
+            ).ev;
+            cumul_ev += ev_with * p_next_card_is[new_second_card];
         } else {
-            let ev_standing = ev_stand(TotalHashedPlayerHand::from_two_cards(split_card, next_card), upcard, &deck_after_this_card);
-            cumul_ev += ev_standing * p_next_card_is[next_card];
+            let ev_standing = ev_stand(TotalHashedPlayerHand::from_two_cards(split_card, new_second_card), upcard, deck_after_this_card);
+            cumul_ev += ev_standing * p_next_card_is[new_second_card];
         }
     }
 
@@ -221,36 +261,6 @@ fn dealer_probabilities_beating(player_hand_to_beat: u32, dealer_hand: TotalHash
     }
 
     (cumul_prob_dealer_win, cumul_prob_push)
-}
-
-fn can_double(player_hand: &TotalHashedPlayerHand, num_hands: u32) -> bool {
-    if !player_hand.is_two {
-        return false;
-    }
-
-    if !RULES.double_after_split && num_hands > 1 {
-        return false;
-    }
-
-    if RULES.double_any_hands {
-        return true;
-    }
-
-    let total = player_hand.total;
-    if total >= RULES.double_hard_hands_thru_11 && total <= 11 {
-        return true;
-    }
-
-    false
-}
-
-fn can_split(player_hand: &TotalHashedPlayerHand, num_hands: u32) -> bool {
-    let max_hands_allowed = match player_hand.is_pair {
-        Some(A) => RULES.split_aces_limit,
-        Some(_) => RULES.split_hands_limit,
-        None => 1,
-    };
-    num_hands < max_hands_allowed
 }
 
 #[cfg(test)]

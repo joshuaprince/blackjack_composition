@@ -2,6 +2,7 @@ use std::iter::Sum;
 use std::ops::{Index, IndexMut, RangeInclusive};
 
 use derive_more::IntoIterator;
+use strum_macros::{EnumCount as EnumCountMacro, EnumIter};
 
 pub type Rank = u32;
 pub const RANKS: RangeInclusive<Rank> = 0..=9;
@@ -32,7 +33,7 @@ impl<T> RankArray<T> where for <'a> T: Sum<&'a T> {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, enum_map::Enum)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug, Hash, enum_map::Enum, EnumCountMacro)]
 pub enum Action {
     Stand,
     Hit,

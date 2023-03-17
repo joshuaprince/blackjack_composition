@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 
 use derive_more::{Add, AddAssign};
+use enum_map::enum_map;
 
 use crate::{composition_strategy, hand, perfect_strategy, RULES, strategy_comparison};
 use crate::basic_strategy::BasicStrategyChart;
@@ -101,19 +102,34 @@ pub fn play_hand(
             // strategy calculation, we need to act as though that card is still in the deck.
             let deck_plus_down_card  = deck.added(dealer_hand[1]);
 
+            let mut splits_allowed = 0;
+            let allowed_actions = enum_map! {
+                Action::Stand => true,
+                Action::Hit => true,
+                Action::Double => current_hand.cards.len() == 2
+                    && (RULES.double_after_split || num_hands == 1)
+                    && (RULES.double_any_hands ||
+                        (current_hand.total() >= RULES.double_hard_hands_thru_11 && current_hand.total() <= 11)),
+                Action::Split => match current_hand.is_pair() {
+                    Some(A) => { splits_allowed = RULES.split_aces_limit - num_hands; splits_allowed > 0 },
+                    Some(_) => { splits_allowed = RULES.split_hands_limit - num_hands; splits_allowed > 0 },
+                    None => false,
+                }
+            };
+
             let decision = match player_decision_method {
                 PlayerDecisionMethod::BasicStrategy(chart) => {
-                    chart.context_basic_play(current_hand, dealer_up, num_hands)
+                    chart.context_basic_play(allowed_actions, current_hand, dealer_up)
                 },
                 PlayerDecisionMethod::CompositionStrategy => {
                     composition_strategy::hand_composition_play(current_hand, num_hands, dealer_up, RULES.decks)
                 },
                 PlayerDecisionMethod::PerfectStrategy => {
-                    perfect_strategy::perfect_play(current_hand, num_hands, dealer_up, &deck_plus_down_card).action
+                    perfect_strategy::perfect_play(allowed_actions, current_hand, splits_allowed, dealer_up, &deck_plus_down_card).action
                 },
                 PlayerDecisionMethod::BasicPerfectComparison(basic_chart) => {
                     let (action, comp) = strategy_comparison::decide(
-                        basic_chart, current_hand, dealer_up, num_hands, &deck_plus_down_card
+                        basic_chart, allowed_actions, current_hand, splits_allowed, dealer_up, &deck_plus_down_card
                     );
                     comparison += comp;
                     action

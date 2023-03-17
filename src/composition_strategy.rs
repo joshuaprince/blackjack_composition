@@ -35,7 +35,8 @@ fn composition_play(
         deck.card_counts[*card as usize] -= 1;
     }
 
-    let action = perfect_play(&concrete_hand, num_hands, dealer_up, &deck).action;
+    // TODO: update this with the new perfect_play that takes in allowed actions
+    // let action = perfect_play(&concrete_hand, num_hands, dealer_up, &deck).action;
 
     // TODO: Reuse comparison code
     // let bs_action = BS_CHART.lock().unwrap().context_basic_play(&concrete_hand, dealer_up, num_hands);
@@ -43,5 +44,5 @@ fn composition_play(
     //     println!("Composition-dependent deviation: {:?} vs {} = {:?}", concrete_hand, dealer_up, action);
     // }
 
-    action
+    todo!()
 }
