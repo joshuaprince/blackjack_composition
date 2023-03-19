@@ -57,22 +57,22 @@ fn main() {
     loop {
         thread::sleep(time::Duration::from_secs(1));
         let s = status.lock().unwrap();
-        println!("Played {} hands ({} shoes) and had total of {:+} returned. \
-        Edge = {}%, {} hands/sec total ({} hands/{} shoes in last second), \
+        println!("Started {} hands ({} shoes, {} units placed) and had total of {:+} returned. \
+        Edge = {}% (units returned/placed), {} hands/sec total ({} hands/{} shoes in last second), \
         {}/{} deviant actions {}% average +EV/hand. \
         {}/{}/{} insurances won/taken/offered ({:+} EV).",
-             s.sim.hands_played, s.sim.shoes_played,
-             s.sim.roi, s.sim.roi / s.sim.hands_played as f64 * 100.0,
-             (s.sim.hands_played as f64 / start_time.elapsed().as_secs_f64()).round(),
-             (s.sim.hands_played - hands_played_last_seen),
-             (s.sim.shoes_played - shoes_played_last_seen),
-             s.comparison.deviations, s.sim.decisions_made,
-             s.comparison.gained_ev_deviations / s.sim.hands_played as f64 * 100.0,
-             s.sim.insurances_won, s.sim.insurances_taken, s.sim.insurances_offered,
-             s.comparison.gained_ev_insurance / s.sim.hands_played as f64 * 100.0,
+                 s.sim.hands_started, s.sim.shoes_played, s.sim.bet_units_placed,
+                 s.sim.roi, s.sim.roi / s.sim.bet_units_placed * 100.0,
+                 (s.sim.hands_started as f64 / start_time.elapsed().as_secs_f64()).round(),
+                 (s.sim.hands_started - hands_played_last_seen),
+                 (s.sim.shoes_played - shoes_played_last_seen),
+                 s.comparison.deviations, s.sim.decisions_made,
+                 s.comparison.gained_ev_deviations / s.sim.hands_started as f64 * 100.0,
+                 s.sim.insurances_won, s.sim.insurances_taken, s.sim.insurances_offered,
+                 s.comparison.gained_ev_insurance / s.sim.hands_started as f64 * 100.0,
         );
 
-        hands_played_last_seen = s.sim.hands_played;
+        hands_played_last_seen = s.sim.hands_started;
         shoes_played_last_seen = s.sim.shoes_played;
 
         times_printed += 1;

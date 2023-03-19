@@ -13,7 +13,8 @@ use crate::types::*;
 #[derive(Default, Add, AddAssign)]
 pub struct SimulationResult {
     pub shoes_played: u64,
-    pub hands_played: u64,
+    pub hands_started: u64,
+    pub bet_units_placed: f64,
     pub decisions_made: u64,
 
     pub insurances_offered: u64,
@@ -47,7 +48,7 @@ pub fn play_hand(
     let mut bet_units: Vec<f64> = vec![1.0];
 
     let mut result = SimulationResult::default();
-    result.hands_played += 1;
+    result.hands_started += 1;
 
     let mut comparison = BasicPerfectComparison::default();
 
@@ -81,11 +82,23 @@ pub fn play_hand(
         }
     }
 
-    // Check for dealt Blackjacks
+    // Check for dealt Blackjacks (early return if so)
     match (dealer_hand.total(), &player_hands[0].total()) {
-        (21, 21) => { result.roi += 0f64; return (result, comparison); },
-        (21, _) => { result.roi += -1f64; return (result, comparison); },
-        (_, 21) => { result.roi += RULES.blackjack_multiplier; return (result, comparison); },
+        (21, 21) => {
+            result.roi += 0f64;
+            result.bet_units_placed += 1.0;
+            return (result, comparison);
+        },
+        (21, _) => {
+            result.roi += -1f64;
+            result.bet_units_placed += 1.0;
+            return (result, comparison);
+        },
+        (_, 21) => {
+            result.roi += RULES.blackjack_multiplier;
+            result.bet_units_placed += 1.0;
+            return (result, comparison);
+        },
         (_, _) => (),
     }
 
@@ -187,13 +200,14 @@ pub fn play_hand(
             dealer_hand += deck.draw();
         }
     }
-
-    // Sum up winnings
     let dealer_score = match dealer_hand.total() {
         t if t > 21 => 1,  // Dealer bust score of 1, still beats a player bust (0)
         t => t,
     };
+
+    // Sum up winnings
     for (hand_idx, hand) in player_hands.iter().enumerate() {
+        result.bet_units_placed += bet_units[hand_idx];
         let hand_score = match hand.total() {
             t if t > 21 => 0,
             t => t,
