@@ -24,13 +24,19 @@ pub struct EvCalcResult {
 /// action and its EV.
 ///
 /// # Arguments
+/// * `allowed_actions` - The set of Actions the player is allowed to take in this play.
 /// * `hand` - The Player's hand that is awaiting an action.
-/// * `num_hands` - The total number of hands that the player has split to at this point. This is
-///                 used to determine how many splits and doubles are allowed with the current
-///                 rule set.
+/// * `splits_allowed` - Number of times the player is allowed to split assuming splittable cards
+///                      continue to be dealt.
 /// * `dealer_up` - The card that the dealer is showing.
 /// * `deck` - The remaining draw pile, as currently known at the time the action is taken.
-pub fn perfect_play(allowed_actions: EnumMap<Action, bool>, hand: &Hand, splits_allowed: u32, dealer_up: Rank, deck: &Deck) -> EvCalcResult {
+pub fn perfect_play(
+    allowed_actions: EnumMap<Action, bool>,
+    hand: &Hand,
+    splits_allowed: u32,
+    dealer_up: Rank,
+    deck: &Deck
+) -> EvCalcResult {
     ev(allowed_actions, TotalHashedPlayerHand::from(hand.clone()), splits_allowed, dealer_up, *deck)
 }
 
