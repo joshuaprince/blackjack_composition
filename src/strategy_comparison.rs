@@ -9,6 +9,7 @@ use memoize::lazy_static::lazy_static;
 use crate::{perfect_strategy, RULES};
 use crate::basic_strategy::{BasicStrategyChart, BasicStrategyChartKey, BasicStrategyHand, int_to_rank_str};
 use crate::deck::Deck;
+use crate::hand::canonical_hand::CanonicalHand;
 use crate::hand::Hand;
 use crate::types::{A, Action, Rank, RANKS};
 
@@ -28,7 +29,7 @@ pub fn decide(
     deck: &Deck
 ) -> (Action, BasicPerfectComparison) {
     let bs_decision = basic_chart.context_basic_play(allowed_actions, hand, dealer_up);
-    let ps_calc = perfect_strategy::perfect_play(allowed_actions, hand, splits_allowed, dealer_up, deck);
+    let ps_calc = perfect_strategy::perfect_play(allowed_actions, &CanonicalHand::from_cards(hand), splits_allowed, dealer_up, deck);
     let ps_decision = ps_calc.action;
 
     let mut cmp_stats = BasicPerfectComparison::default();

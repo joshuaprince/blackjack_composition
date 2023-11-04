@@ -5,6 +5,7 @@ use crate::types::{A, Rank, T};
 
 pub mod composition_hashed;
 pub mod total_hashed;
+pub mod canonical_hand;
 
 /// A Hand containing cards belonging to a Player or Dealer.
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]

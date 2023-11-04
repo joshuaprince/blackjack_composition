@@ -5,8 +5,9 @@ use memoize::memoize;
 use strum::EnumCount;
 
 use crate::deck::Deck;
-use crate::hand::Hand;
-use crate::hand::total_hashed::{TotalHashedDealerHand, TotalHashedPlayerHand};
+use crate::hand::canonical_hand::CanonicalHand;
+use crate::hand::canonical_hand::CanonicalHand::Busted;
+use crate::hand::total_hashed::{TotalHashedDealerHand};
 use crate::RULES;
 use crate::types::{*};
 
@@ -32,12 +33,12 @@ pub struct EvCalcResult {
 /// * `deck` - The remaining draw pile, as currently known at the time the action is taken.
 pub fn perfect_play(
     allowed_actions: EnumMap<Action, bool>,
-    hand: &Hand,
+    hand: &CanonicalHand,
     splits_allowed: u32,
     dealer_up: Rank,
     deck: &Deck
 ) -> EvCalcResult {
-    ev(allowed_actions, TotalHashedPlayerHand::from(hand.clone()), splits_allowed, dealer_up, *deck)
+    ev(allowed_actions, CanonicalHand::from(hand.clone()), splits_allowed, dealer_up, *deck)
 }
 
 /// Analyze the current deck to calculate the EV of taking an insurance bet. This function assumes
@@ -60,7 +61,7 @@ pub fn perfect_insure(deck: &Deck) -> (bool, f64) {
 #[memoize(Capacity: 1_000_000)]
 fn ev(
     allowed_actions: EnumMap<Action, bool>,
-    player_hand: TotalHashedPlayerHand,
+    player_hand: CanonicalHand,
     splits_allowed: u32,
     upcard: Rank,
     deck: Deck
@@ -70,7 +71,7 @@ fn ev(
 
     let mut choices = EnumMap::from_array([f64::NEG_INFINITY; Action::COUNT]);
 
-    if player_hand.total > 21 {
+    if player_hand == Busted {
         choices[Action::Stand] = -1f64;
         return EvCalcResult { ev: -1f64, action: Action::Stand, choices };
     }
@@ -105,22 +106,22 @@ fn ev(
     EvCalcResult { ev: choices[max_ev_choice], action: max_ev_choice, choices }
 }
 
-fn ev_stand(player_hand: TotalHashedPlayerHand, upcard: Rank, deck: Deck) -> f64 {
-    if player_hand.total > 21 {
+fn ev_stand(player_hand: CanonicalHand, upcard: Rank, deck: Deck) -> f64 {
+    if player_hand == Busted {
         return -1f64;
     }
 
     let (p_dealer_win, p_push) = dealer_probabilities_beating(
-        player_hand.total, TotalHashedDealerHand::from_single_card(upcard), deck
+        player_hand.total(), TotalHashedDealerHand::from_single_card(upcard), deck
     );
     let p_player_win: f64 = 1f64 - p_dealer_win - p_push;
 
     p_player_win - p_dealer_win
 }
 
-fn ev_hit(player_hand: TotalHashedPlayerHand, upcard: Rank, deck: Deck, can_act_again: bool) -> f64 {
+fn ev_hit(player_hand: CanonicalHand, upcard: Rank, deck: Deck, can_act_again: bool) -> f64 {
     // Base case - the player busted.
-    if player_hand.total > 21 {
+    if player_hand == Busted {
         return -1f64;
     }
 
@@ -148,19 +149,22 @@ fn ev_hit(player_hand: TotalHashedPlayerHand, upcard: Rank, deck: Deck, can_act_
     cumul_ev
 }
 
-fn ev_double(player_hand: TotalHashedPlayerHand, upcard: Rank, deck: Deck) -> f64 {
+fn ev_double(player_hand: CanonicalHand, upcard: Rank, deck: Deck) -> f64 {
     // Not recursive - only 1 card left.
     2f64 * ev_hit(player_hand, upcard, deck, false)
 }
 
-fn ev_split(player_hand: TotalHashedPlayerHand, splits_allowed: u32, upcard: Rank, deck: Deck) -> f64 {
+fn ev_split(player_hand: CanonicalHand, splits_allowed: u32, upcard: Rank, deck: Deck) -> f64 {
     // This function returns the total EV of both split hands added together.
 
     assert!(splits_allowed > 0);
 
-    let split_card = player_hand.is_pair.unwrap();
+    let split_card = match player_hand {
+        CanonicalHand::Pair(r) => r,
+        _ => panic!("Tried to split a non-paired hand!")
+    };
 
-    let can_act_after = RULES.hit_split_aces || (player_hand.is_pair != Some(A));
+    let can_act_after = RULES.hit_split_aces || split_card != A;
     let mut actions_allowed_after = EnumMap::default();
     actions_allowed_after[Action::Stand] = true;
     actions_allowed_after[Action::Hit] = can_act_after;
@@ -180,14 +184,14 @@ fn ev_split(player_hand: TotalHashedPlayerHand, splits_allowed: u32, upcard: Ran
         if can_act_after {
             let ev_with = ev(
                 actions_allowed_after,
-                TotalHashedPlayerHand::from_two_cards(split_card, new_second_card),
+                CanonicalHand::Single(split_card) + new_second_card,
                 splits_allowed_after,
                 upcard,
                 deck_after_this_card
             ).ev;
             cumul_ev += ev_with * p_next_card_is[new_second_card];
         } else {
-            let ev_standing = ev_stand(TotalHashedPlayerHand::from_two_cards(split_card, new_second_card), upcard, deck_after_this_card);
+            let ev_standing = ev_stand(CanonicalHand::Single(split_card) + new_second_card, upcard, deck_after_this_card);
             cumul_ev += ev_standing * p_next_card_is[new_second_card];
         }
     }
@@ -296,13 +300,14 @@ mod tests {
 
         // let evx = ev_double(&player, upcard, 1f64, &deck2);
         // println!("evx={}", evx);
-        let result = ev(TotalHashedPlayerHand::from(player.clone()), 1, upcard, deck.clone());
-        println!("The EV of {:?} vs {} is {}. You should {:?}.", player, upcard, result.ev, result.action);
-        for (action, action_ev) in result.choices {
-            if action_ev != f64::NEG_INFINITY {
-                println!(" -> {:?} = {}", action, action_ev);
-            }
-        }
+        // TODO
+        // let result = ev(CanonicalHand::from(player.clone()), 1, upcard, deck.clone());
+        // println!("The EV of {:?} vs {} is {}. You should {:?}.", player, upcard, result.ev, result.action);
+        // for (action, action_ev) in result.choices {
+        //     if action_ev != f64::NEG_INFINITY {
+        //         println!(" -> {:?} = {}", action, action_ev);
+        //     }
+        // }
     }
 
     #[test]
@@ -315,14 +320,15 @@ mod tests {
         let sims = 10;
         let mut roi = 0f64;
 
-        let calc_result = ev(TotalHashedPlayerHand::from(player_hands[0].clone()), 1, upcard, deck.clone());
-        println!("I calculate EV: {:+}%", calc_result.ev * 100.0);
-
-        for _ in 0..sims {
-            let mut deck = deck.clone();
-            roi += play_hand(&mut deck, PlayerDecisionMethod::PerfectStrategy).0.roi
-        }
-
-        println!("Total ROI: {} EV: {:+}%", roi, roi as f64 / sims as f64 * 100.0);
+        // TODO
+        // let calc_result = ev(CanonicalHand::from(player_hands[0].clone()), 1, upcard, deck.clone());
+        // println!("I calculate EV: {:+}%", calc_result.ev * 100.0);
+        //
+        // for _ in 0..sims {
+        //     let mut deck = deck.clone();
+        //     roi += play_hand(&mut deck, PlayerDecisionMethod::PerfectStrategy).0.roi
+        // }
+        //
+        // println!("Total ROI: {} EV: {:+}%", roi, roi as f64 / sims as f64 * 100.0);
     }
 }

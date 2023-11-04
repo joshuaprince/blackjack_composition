@@ -40,3 +40,11 @@ pub enum Action {
     Double,
     Split,
 }
+
+pub fn additive_value(r: Rank) -> u32 {
+    match r {
+        T => 10,
+        A => 1,
+        n => n
+    }
+}

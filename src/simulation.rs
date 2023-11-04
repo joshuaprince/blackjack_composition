@@ -7,6 +7,7 @@ use crate::{composition_strategy, hand, perfect_strategy, RULES, strategy_compar
 use crate::basic_strategy::BasicStrategyChart;
 use crate::deck::Deck;
 use crate::hand::*;
+use crate::hand::canonical_hand::CanonicalHand;
 use crate::strategy_comparison::BasicPerfectComparison;
 use crate::types::*;
 
@@ -138,7 +139,7 @@ pub fn play_hand(
                     composition_strategy::hand_composition_play(current_hand, num_hands, dealer_up, RULES.decks)
                 },
                 PlayerDecisionMethod::PerfectStrategy => {
-                    perfect_strategy::perfect_play(allowed_actions, current_hand, splits_allowed, dealer_up, &deck_plus_down_card).action
+                    perfect_strategy::perfect_play(allowed_actions, &CanonicalHand::from_cards(current_hand), splits_allowed, dealer_up, &deck_plus_down_card).action
                 },
                 PlayerDecisionMethod::BasicPerfectComparison(basic_chart) => {
                     let (action, comp) = strategy_comparison::decide(
