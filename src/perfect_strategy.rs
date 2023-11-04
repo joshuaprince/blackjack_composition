@@ -275,7 +275,8 @@ fn dealer_probabilities_beating(player_hand_to_beat: u32, dealer_hand: TotalHash
 
 #[cfg(test)]
 mod tests {
-    use crate::{deck, hand, shoe};
+    use enum_map::enum_map;
+    use crate::{deck, shoe};
     use crate::deck::Deck;
     use crate::perfect_strategy::*;
     use crate::simulation::{play_hand, PlayerDecisionMethod};
@@ -296,18 +297,17 @@ mod tests {
     fn test_ev() {
         let deck: Deck = shoe!(DECKS);
         let upcard: Rank = A;
-        let player = hand![8, 8];
+        let player = CanonicalHand::Pair(T);
+        let allowed_actions = enum_map! { _ => true };
 
-        // let evx = ev_double(&player, upcard, 1f64, &deck2);
-        // println!("evx={}", evx);
-        // TODO
-        // let result = ev(CanonicalHand::from(player.clone()), 1, upcard, deck.clone());
-        // println!("The EV of {:?} vs {} is {}. You should {:?}.", player, upcard, result.ev, result.action);
-        // for (action, action_ev) in result.choices {
-        //     if action_ev != f64::NEG_INFINITY {
-        //         println!(" -> {:?} = {}", action, action_ev);
-        //     }
-        // }
+        let evx = ev(allowed_actions, player, 4, T, deck);
+
+        println!("The EV of {:?} vs {} is {}. You should {:?}.", player, upcard, evx.ev, evx.action);
+        for (action, action_ev) in evx.choices {
+            if action_ev != f64::NEG_INFINITY {
+                println!(" -> {:?} = {}", action, action_ev);
+            }
+        }
     }
 
     #[test]
@@ -316,7 +316,7 @@ mod tests {
         // Dealer down card cannot be an ace
         let deck = deck![11, 3, 0, 1, 1, 0, 2, 2, 2, 3];
         let upcard: Rank = 5;
-        let player_hands = vec![hand![T, T]];
+        //let player_hands = vec![hand![T, T]];
         let sims = 10;
         let mut roi = 0f64;
 

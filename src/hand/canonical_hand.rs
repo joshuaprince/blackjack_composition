@@ -14,6 +14,10 @@ pub enum CanonicalHand {
     /// One card of unspecified suit.
     Single(Rank),
 
+    /// One Ace or Ten that, if paired with a Ten or Ace respectively, will make a Blackjack instead
+    /// of a Soft 21. Only Ace and Ten should use this.
+    SingleHalfBlackjack(Rank),
+
     /// A hand of two unspecified suits and ranks that does not consist of an Ace counting as 11.
     Hard2Card(u32),
 
@@ -22,18 +26,18 @@ pub enum CanonicalHand {
     Hard3PlusCard(u32),
 
     /// A hand of two or more unspecified suits and ranks consists of an Ace counting as 11.
-    /// The enclosed value counts Ace as 11 and cannot be a Pair of Aces or Blackjack (therefore
-    /// it is in 13..20).
+    /// The enclosed value counts Ace as 11 and cannot be a Pair of Aces. It can be a 2-card Soft
+    /// 21 that is not Blackjack if the player previously split (therefore it is in `13..21`).
     Soft2Card(u32),
 
     /// A hand of 3 or more unspecified suits and ranks consists of an Ace counting as 11.
-    /// The enclosed value counts Ace as 11 (therefore it is in 13..21).
+    /// The enclosed value counts Ace as 11 (therefore it is in `13..21`).
     Soft3PlusCard(u32),
 
     /// A hand of two cards of identical rank and unspecified suits.
     Pair(Rank),
 
-    /// A hand of an Ace and a Ten of unspecified suit.
+    /// A hand of an Ace and a Ten of unspecified suit on the Player's first hand.
     Blackjack,
 
     /// A hand with 22 or more points.
@@ -49,10 +53,16 @@ impl ops::Add<Rank> for CanonicalHand {
 
             Single(lhs) => {
                 match (lhs, rhs) {
-                    (A, T) | (T, A) => { Blackjack }
                     (n, m) if n == m => { Pair(n) }
-                    (A, n) | (n, A) => { Soft2Card(11 + n) }
+                    (A, n) | (n, A) => { Soft2Card(11 + additive_value(n)) }
                     (n, m) => { Hard2Card(additive_value(n) + additive_value(m)) }
+                }
+            }
+
+            SingleHalfBlackjack(lhs) => {
+                match (lhs, rhs) {
+                    (A, T) | (T, A) => { Blackjack }
+                    _ => Single(lhs) + rhs
                 }
             }
 
@@ -98,9 +108,9 @@ impl CanonicalHand {
     pub fn total(&self) -> u32 {
         match self {
             Empty => 0,
-            Single(r) => *r,
-            Hard2Card(r) | Hard3PlusCard(r) | Soft2Card(r) | Soft3PlusCard(r) => *r,
-            Pair(r) => 2 * r,
+            Single(r) | SingleHalfBlackjack(r) => additive_value(*r),
+            Hard2Card(r) | Hard3PlusCard(r) | Soft2Card(r) | Soft3PlusCard(r) => additive_value(*r),
+            Pair(r) => 2 * additive_value(*r),
             Blackjack => 21,
             Busted => panic!("Tried to get total score of a busted hand!")
         }
@@ -109,7 +119,7 @@ impl CanonicalHand {
 
 #[cfg(test)]
 mod tests {
-    use crate::hand::canonical_hand::CanonicalHand::{Blackjack, Busted, Empty, Hard2Card, Hard3PlusCard, Pair, Single, Soft2Card, Soft3PlusCard};
+    use crate::hand::canonical_hand::CanonicalHand::{Blackjack, Busted, Empty, Hard2Card, Hard3PlusCard, Pair, Single, SingleHalfBlackjack, Soft2Card, Soft3PlusCard};
     use crate::types::{A, T};
 
     #[test]
@@ -126,8 +136,10 @@ mod tests {
         assert_eq!(Single(6) + T, Hard2Card(16));
         assert_eq!(Single(6) + A, Soft2Card(17));
 
-        assert_eq!(Single(T) + A, Blackjack);
-        assert_eq!(Single(A) + T, Blackjack);
+        assert_eq!(Single(T) + A, Soft2Card(21));
+        assert_eq!(Single(A) + T, Soft2Card(21));
+        assert_eq!(SingleHalfBlackjack(T) + A, Blackjack);
+        assert_eq!(SingleHalfBlackjack(A) + T, Blackjack);
 
         assert_eq!(Single(3) + 3, Pair(3));
         assert_eq!(Single(T) + T, Pair(T));
